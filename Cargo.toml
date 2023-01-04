@@ -1,0 +1,26 @@
+[package]
+name = "akashic-diary"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+#rodio = "0.5"
+#rodio = "0.16.0"
+#hound = "3.5.0"
+#cpal = "0.9"
+cpal = "0.14.2"
+hound = "3.5.0"
+#ogg-opus = "0.1.2"
+vorbis_rs = "0.1.0"
+tokio = {version="1.23.0", features=["full"]}
+async-stream = "0.3.3"
+futures-util = "0.3.25"
+futures-core = "0.3.25"
+clap = { version = "4.0.32", features = ["derive", "color"] }
+chrono = "0.4.23"
+wide = "0.7.5"
+derive_more = "0.99.17"
+signal-hook = "0.3.14"
+libc = "0.2.139"

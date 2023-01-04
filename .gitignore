@@ -1,0 +1,5 @@
+/target
+*.wav
+*perf.data*
+*flamegraph.svg*
+*.ogg
