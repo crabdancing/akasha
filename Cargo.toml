@@ -1,7 +1,9 @@
 [package]
-name = "akashic-diary"
+name = "akasha"
 version = "0.1.0"
 edition = "2021"
+authors = ["Alexandia P."]
+description = "Headless recording app, designed to run indefinitely and automatically break microphone stream into segments for ease of handling. Supports WAV and OGG format."
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

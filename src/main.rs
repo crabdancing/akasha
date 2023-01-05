@@ -60,8 +60,7 @@ struct Args {
     #[structopt(default_value = "%Y-%m-%d__%H_%M_%S__%a_%b__%z")]
     time_format: String,
     #[arg(
-    long, default_value="666000ms",
-    value_parser = duration_range_value_parse!(min: 1s, max: 1h)
+    long, value_parser = duration_range_value_parse!(min: 1s, max: 1h)
     )]
     display_dur: Option<DurationHuman>,
     #[arg(long)]
