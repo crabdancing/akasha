@@ -1,4 +1,3 @@
-// TODO: command line arguments for controlling e.g. block size, etc.
 // TODO: find a library that is interoperable with the Orange Pi GPIO so that we can control an indicator light
 // TODO: more intelligent microphone device selection logic -- maybe use an argument to pass mic name?
 // TODO: print db info as well as console indicator
