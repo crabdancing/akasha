@@ -35,7 +35,7 @@ pub async fn record_segments<S: Stream<Item = PathBuf> + Unpin>(
 
         let mut volume_stream_builder_inst = display_volume::VolumeStreamBuilder::new();
         volume_stream_builder_inst.dur_of_display = match state.args.read().await.display_dur {
-            Some(duration_secs) => Some(Duration::from_secs_f32(duration_secs)),
+            Some(human_dur) => Some(Duration::from(&human_dur)),
             None => None
         };
         volume_stream_builder_inst.enabled = state.args.read().await.display;
@@ -43,8 +43,8 @@ pub async fn record_segments<S: Stream<Item = PathBuf> + Unpin>(
             mic_input_stream);
         pin_mut!(displayed_volume_stream);
 
-        let segment_dur_secs = &state.args.read().await.segment_dur_secs;
-        let segment_dur = Duration::from_secs_f32(*segment_dur_secs);
+        let dur = &state.args.read().await.segment_dur;
+        let segment_dur = Duration::from(dur);
         match state.args.read().await.format {
             FormatSelect::Wav => {
                 write_audio::write_to_wav(

@@ -4,13 +4,7 @@
 // TODO: print db info as well as console indicator
 // TODO: toggle console indicator with spacebar
 // TODO: turn off console indicator with SIGHUP
-// TODO: program-wide state struct containing:
-// - time of program start (for doing logic against)
-// - program args (for configuring behavior)
-// - note: each thing that needs modification should probably be in its OWN mutex, rather than one big one
-// - dynamic flags for program behavior (e.g., should we display the audio thing?)
-// - program behavior logic should be clumped into one place, set values in the flags in the state struct,
-//   and then internal logic only concerns itself with those flags.
+
 mod write_audio;
 mod microphone;
 mod record;
@@ -35,6 +29,8 @@ use futures_util::pin_mut;
 use signal_hook::SigId;
 use tokio::sync::RwLock;
 use tokio::time::Instant;
+use clap_duration::duration_range_value_parse;
+use duration_human::{DurationHuman, DurationHumanValidator};
 
 type Chunk = Vec<f32>;
 
@@ -57,14 +53,17 @@ struct Args {
     #[structopt(default_value = "akasha")]
     name_prefix: String,
     //#[structopt(long = 0f32)]
-    #[arg(short, long)]
-    #[structopt(default_value = "60.0")]
-    segment_dur_secs: f32,
+    #[arg(short, long, default_value="60s",
+    value_parser = duration_range_value_parse!(min: 1s, max: 1h))]
+    segment_dur: DurationHuman,
     #[arg(short, long)]
     #[structopt(default_value = "%Y-%m-%d__%H_%M_%S__%a_%b__%z")]
     time_format: String,
-    #[arg(long)]
-    display_dur: Option<f32>,
+    #[arg(
+    long, default_value="666000ms",
+    value_parser = duration_range_value_parse!(min: 1s, max: 1h)
+    )]
+    display_dur: Option<DurationHuman>,
     #[arg(long)]
     display: bool,
 }
