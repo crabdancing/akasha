@@ -62,7 +62,11 @@ struct Args {
     segment_dur_secs: f32,
     #[arg(short, long)]
     #[structopt(default_value = "%Y-%m-%d__%H_%M_%S__%a_%b__%z")]
-    time_format: String
+    time_format: String,
+    #[arg(long)]
+    display_dur: Option<f32>,
+    #[arg(long)]
+    display: bool,
 }
 
 #[derive(Default)]

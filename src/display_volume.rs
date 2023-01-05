@@ -51,9 +51,6 @@ impl Into<Percent> for Db {
 
 
 
-struct Config {
-    every_n_chunks: usize,
-}
 fn avg8x(input: Vec<f32>) -> Vec<f32> {
     input.chunks_exact(8).map(|chunk| {
         let simd_chunk = f32x8::from(chunk);
@@ -94,16 +91,16 @@ pub fn sound_bar(p: &Percent) -> String {
 }
 
 #[derive(Clone)]
-struct VolumeStreamBuilder {
-    enabled: bool,
-    time_of_start: Instant,
-    dur_of_display: Option<Duration>,
-    every_n: u128
+pub struct VolumeStreamBuilder {
+    pub(crate) enabled: bool,
+    pub(crate) time_of_start: Instant,
+    pub(crate) dur_of_display: Option<Duration>,
+    pub(crate) every_n: u128
 }
 
 
 impl VolumeStreamBuilder {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             enabled: true,
             time_of_start: Instant::now(),
@@ -112,8 +109,8 @@ impl VolumeStreamBuilder {
         }
     }
 
-    fn getstream_display_volume<S: Stream<Item = Chunk>>(&self, mic_audio_stream: S) -> impl Stream<Item = Chunk> {
-        let builder = Arc::new(self.clone());
+    pub fn getstream_display_volume<S: Stream<Item = Chunk>>(&self, mic_audio_stream: S) -> impl Stream<Item = Chunk> {
+        let builder = self.clone();
         let mut display_enabled = builder.enabled;
         stream! {
             let mut chunk_num: u128 = u128::default();
@@ -125,7 +122,7 @@ impl VolumeStreamBuilder {
                     println!("Display disabled.");
                 }
 
-                if display_enabled && builder.every_n != 0 && chunk_num % builder.every_n == 0 {
+                if display_enabled && ( builder.every_n == 0 || (chunk_num % builder.every_n == 0) )  {
                     let p: Percent = get_average_volume(&chunk).into();
                     println!("{}", sound_bar(&p));
                 }
@@ -137,25 +134,25 @@ impl VolumeStreamBuilder {
 }
 
 
-
-pub async fn getstream_display_volume<S: Stream<Item = Chunk>>(mic_audio_stream: S) -> impl Stream<Item = Chunk> {
-    // TODO: change with time of program start so that it doesn't activate on every record
-    let time_at_start = Instant::now();
-    let dur_of_display = Duration::from_secs(30);
-    let mut display_enabled = true;
-    stream! {
-        let mut chunk_num: u128 = u128::default();
-        for await chunk in mic_audio_stream {
-            if display_enabled && time_at_start.elapsed() >= dur_of_display {
-                display_enabled = false;
-                println!("Display disabled.");
-            }
-            if display_enabled && chunk_num % 2 == 0 {
-                let p: Percent = get_average_volume(&chunk).into();
-                println!("{}", sound_bar(&p));
-            }
-            chunk_num = chunk_num.saturating_add(1);
-            yield chunk;
-        }
-    }
-}
+//
+// pub async fn getstream_display_volume<S: Stream<Item = Chunk>>(mic_audio_stream: S) -> impl Stream<Item = Chunk> {
+//     // TODO: change with time of program start so that it doesn't activate on every record
+//     let time_at_start = Instant::now();
+//     let dur_of_display = Duration::from_secs(30);
+//     let mut display_enabled = true;
+//     stream! {
+//         let mut chunk_num: u128 = u128::default();
+//         for await chunk in mic_audio_stream {
+//             if display_enabled && time_at_start.elapsed() >= dur_of_display {
+//                 display_enabled = false;
+//                 println!("Display disabled.");
+//             }
+//             if display_enabled && chunk_num % 2 == 0 {
+//                 let p: Percent = get_average_volume(&chunk).into();
+//                 println!("{}", sound_bar(&p));
+//             }
+//             chunk_num = chunk_num.saturating_add(1);
+//             yield chunk;
+//         }
+//     }
+// }
