@@ -113,37 +113,22 @@ impl VolumeStreamBuilder {
     }
 
     fn getstream_display_volume<S: Stream<Item = Chunk>>(&self, mic_audio_stream: S) -> impl Stream<Item = Chunk> {
-        // TODO: change with time of program start so that it doesn't activate on every record
-        let time_at_start = Instant::now();
-        let dur_of_display = Duration::from_secs(30);
         let builder = Arc::new(self.clone());
         let mut display_enabled = builder.enabled;
         stream! {
             let mut chunk_num: u128 = u128::default();
             for await chunk in mic_audio_stream {
+                if display_enabled
+                        && builder.dur_of_display.is_some()
+                        && builder.time_of_start.elapsed() >= builder.dur_of_display.unwrap()  {
+                    display_enabled = false;
+                    println!("Display disabled.");
+                }
 
-                match (builder.enabled, builder.dur_of_display, builder.time_of_start.elapsed()) {
-                    (false, _, _) => {},
-                    (true, Some(dur), elapsed) => if builder.time_of_start.elapsed() >= dur {
-                        display_enabled = false;
-                        println!("Display disabled.");
-                    },
-                    (true, None, _) => {
-                        display_enabled = false;
-                        println!("Display disabled.");
-                    },
-                    _ => {},
-                };
-                // if display_enabled
-                //         && builder.dur_of_display.is_some()
-                //         && builder.time_of_start.elapsed() >= builder.dur_of_display.unwrap()  {
-                //     display_enabled = false;
-                //     println!("Display disabled.");
-                // }
-                // if display_enabled && chunk_num % builder.every_n.unwrap() == 0 {
-                //     let p: Percent = get_average_volume(&chunk).into();
-                //     println!("{}", sound_bar(&p));
-                // }
+                if display_enabled && builder.every_n != 0 && chunk_num % builder.every_n == 0 {
+                    let p: Percent = get_average_volume(&chunk).into();
+                    println!("{}", sound_bar(&p));
+                }
                 chunk_num = chunk_num.saturating_add(1);
                 yield chunk;
             }
