@@ -53,11 +53,14 @@ struct Args {
     #[clap(value_hint = clap::ValueHint::DirPath)]
     path_dir: PathBuf,
     //#[clap(value_hint = clap::ValueHint::)]
+    #[arg(short, long)]
     #[structopt(default_value = "akasha")]
-    file_name_prefix: String,
+    name_prefix: String,
     //#[structopt(long = 0f32)]
+    #[arg(short, long)]
     #[structopt(default_value = "60.0")]
     segment_dur_secs: f32,
+    #[arg(short, long)]
     #[structopt(default_value = "%Y-%m-%d__%H_%M_%S__%a_%b__%z")]
     time_format: String
 }
@@ -91,7 +94,7 @@ fn streamgen_gen_file_path<A>(args: A) -> impl Stream<Item = PathBuf> where A: D
             now.format(args.time_format.as_str());
         // TODO: path logic for make path of each segment
         let mut recording_path = args.path_dir.clone();
-        let basename = format!("{}__{}", args.file_name_prefix, timestamp_string.to_string());
+        let basename = format!("{}__{}", args.name_prefix, timestamp_string.to_string());
         recording_path.push(basename);
         yield recording_path;
     }

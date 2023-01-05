@@ -12,7 +12,7 @@ use crate::display_volume::getstream_display_volume;
 
 pub async fn record_segments<S: Stream<Item = PathBuf> + Unpin>(
     mut paths: S,
-    mut state: Arc<ProgramState>
+    state: Arc<ProgramState>
 
 ) -> Result<S, Box<dyn Error>> {
     while let Some(path) = paths.next().await {
