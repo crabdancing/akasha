@@ -1,17 +1,19 @@
 use std::error::Error;
+use std::fmt::Debug;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use async_stream::stream;
 use cpal::traits::{DeviceTrait, HostTrait};
 use futures_core::Stream;
 use futures_util::{FutureExt, pin_mut, StreamExt};
-use crate::{FormatSelect, microphone, write_audio};
+use crate::{FormatSelect, microphone, ProgramState, write_audio};
 use crate::display_volume::getstream_display_volume;
 
 pub async fn record_segments<S: Stream<Item = PathBuf> + Unpin>(
     mut paths: S,
-    format: FormatSelect,
-    segment_dur: Duration
+    mut state: Arc<ProgramState>
+
 ) -> Result<S, Box<dyn Error>> {
     while let Some(path) = paths.next().await {
         println!("Begin recording segment...");
@@ -32,13 +34,16 @@ pub async fn record_segments<S: Stream<Item = PathBuf> + Unpin>(
         let displayed_volume_stream = getstream_display_volume(mic_input_stream).await;
         pin_mut!(displayed_volume_stream);
 
-        match format {
+        let segment_dur_secs = &state.args.read().await.segment_dur_secs;
+        let segment_dur = Duration::from_secs_f32(*segment_dur_secs);
+        match state.args.read().await.format {
             FormatSelect::Wav => {
                 write_audio::write_to_wav(
                     &path,
                     displayed_volume_stream,
                     &config,
-                    &segment_dur).await?;
+                    &segment_dur
+                ).await?;
             },
             FormatSelect::Ogg => {
                 write_audio::write_to_ogg(

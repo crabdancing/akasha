@@ -19,6 +19,9 @@ mod display_volume;
 
 extern crate chrono;
 
+use std::borrow::Borrow;
+use std::io::Error;
+use std::ops::Deref;
 use bigdurations::BigDurations;
 use chrono::{DateTime, Local};
 use std::path::PathBuf;
@@ -29,6 +32,9 @@ use async_stream::stream;
 use clap::{Parser, ValueEnum};
 use futures_core::Stream;
 use futures_util::pin_mut;
+use signal_hook::SigId;
+use tokio::sync::RwLock;
+use tokio::time::Instant;
 
 type Chunk = Vec<f32>;
 
@@ -48,14 +54,41 @@ struct Args {
     path_dir: PathBuf,
     //#[clap(value_hint = clap::ValueHint::)]
     #[structopt(default_value = "akasha")]
-    file_name_prefix: String
+    file_name_prefix: String,
+    //#[structopt(long = 0f32)]
+    #[structopt(default_value = "60.0")]
+    segment_dur_secs: f32,
+    #[structopt(default_value = "%Y-%m-%d__%H_%M_%S__%a_%b__%z")]
+    time_format: String
 }
 
-fn streamgen_gen_file_path(args: Args) -> impl Stream<Item = PathBuf> {
+#[derive(Default)]
+struct Signals {
+    sighup: Arc<AtomicBool>
+}
+
+
+pub struct ProgramState {
+    args: RwLock<Args>,
+    time_of_start: RwLock<Instant>,
+    signals: RwLock<Signals>
+}
+
+impl ProgramState {
+    fn new(args: Args) -> Self {
+        Self {
+            args: RwLock::new(args),
+            time_of_start: RwLock::new(Instant::now()),
+            signals: RwLock::new(Signals::default())
+        }
+    }
+}
+
+fn streamgen_gen_file_path<A>(args: A) -> impl Stream<Item = PathBuf> where A: Deref<Target = Args> {
     stream! {
         let now: DateTime<Local> = Local::now();
         let timestamp_string =
-            now.format("%Y-%m-%d__%H_%M_%S__%a_%b__%z");
+            now.format(args.time_format.as_str());
         // TODO: path logic for make path of each segment
         let mut recording_path = args.path_dir.clone();
         let basename = format!("{}__{}", args.file_name_prefix, timestamp_string.to_string());
@@ -66,33 +99,35 @@ fn streamgen_gen_file_path(args: Args) -> impl Stream<Item = PathBuf> {
 
 #[tokio::main]
 async fn main() {
-    // let sighup = Arc::new(AtomicBool::new(false));
-    // signal_hook::flag::register(libc::SIGHUP, (&sighup).clone()).unwrap();
-    // loop {
-    //     println!("{:#?}", sighup);
-    //     std::thread::sleep(Duration::from_secs(1));
-    // }
     let args = Args::parse();
-    let args_ptr = &args;
+
+    let state = Arc::new(ProgramState::new(args));
+
+    match signal_hook::flag::register(libc::SIGHUP, (&state.signals.write().await.sighup).clone()) {
+        Ok(_) => {}
+        Err(_) => {
+            println!("Warning: couldn't register signal: SIGHUP");
+        }
+    }
 
     let local = tokio::task::LocalSet::new();
 
     local.run_until(async move {
         loop {
-            let my_args = args.clone();
+            let state_ptr = state.clone();
             let task_result = tokio::task::spawn_local(async move {
-                if !my_args.path_dir.exists() {
-                    std::fs::create_dir_all(my_args.path_dir.clone()).expect("Failed to create path");
+                let args = state_ptr.args.read().await;
+                if !args.path_dir.exists() {
+                    std::fs::create_dir_all(&args.path_dir).expect("Failed to create path");
                 }
                 // I clone everything because I don't care about lifetimes
                 let new_file_name_stream =
-                    streamgen_gen_file_path(my_args.clone());
+                    streamgen_gen_file_path(args);
                 pin_mut!(new_file_name_stream);
 
                 let result = record::record_segments(
                     new_file_name_stream,
-                    my_args.format.clone(),
-                    Duration::from_mins_f64(1.)
+                    state_ptr.clone()
                 ).await;
                 if let Err(_result) = result {
                     println!("Warning! Recording segment failed with error: {}", _result);
