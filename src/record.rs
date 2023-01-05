@@ -7,7 +7,7 @@ use async_stream::stream;
 use cpal::traits::{DeviceTrait, HostTrait};
 use futures_core::Stream;
 use futures_util::{FutureExt, pin_mut, StreamExt};
-use crate::{Opt, FormatSelect, microphone, ProgramState, write_audio};
+use crate::{Cli, FormatSelect, microphone, ProgramState, write_audio};
 use crate::display_volume;
 use crate::display_volume::VolumeStreamBuilder;
 
@@ -34,19 +34,19 @@ pub async fn record_segments<S: Stream<Item = PathBuf> + Unpin>(
         pin_mut!(mic_input_stream);
 
         let mut volume_stream_builder_inst = display_volume::VolumeStreamBuilder::new();
-        volume_stream_builder_inst.dur_of_display = match state.opt.read().await.display_dur {
+        volume_stream_builder_inst.dur_of_display = match state.cli.read().await.cmd.as_rec().unwrap().display_dur {
             Some(human_dur) => Some(Duration::from(&human_dur)),
             None => None
         };
-        volume_stream_builder_inst.enabled = state.opt.read().await.display;
+        volume_stream_builder_inst.enabled = state.cli.read().await.cmd.as_rec().unwrap().display;
         volume_stream_builder_inst.time_of_start = *state.time_of_start.read().await;
         let displayed_volume_stream = volume_stream_builder_inst.getstream_display_volume(
             mic_input_stream);
         pin_mut!(displayed_volume_stream);
 
-        let dur = &state.opt.read().await.segment_dur;
-        let segment_dur = Duration::from(dur);
-        match state.opt.read().await.format {
+        let dur = state.cli.read().await.cmd.as_rec().unwrap().segment_dur;
+        let segment_dur = Duration::from(&dur);
+        match state.cli.read().await.cmd.as_rec().unwrap().format {
             FormatSelect::Wav => {
                 write_audio::write_to_wav(
                     &path,

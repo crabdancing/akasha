@@ -23,6 +23,7 @@ dependencies = [
  "cpal",
  "derive_more",
  "duration-human",
+ "enum-as-inner",
  "futures-core",
  "futures-util",
  "hound",
@@ -423,6 +424,18 @@ dependencies = [
  "regex",
  "syn",
  "thiserror",
+]
+
+[[package]]
+name = "enum-as-inner"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c9720bba047d567ffc8a3cba48bf19126600e249ab7f128e9233e6376976a116"
+dependencies = [
+ "heck",
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
