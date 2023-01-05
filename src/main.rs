@@ -43,13 +43,14 @@ pub enum FormatSelect {
 
 #[derive(Parser, Debug, Clone)]
 #[command(author, version, about, long_about = None)]
-struct Args {
-    #[arg(short, long)]
+struct Opt {
+    #[arg(short, long, conflicts_with = "list_devices")]
     format: FormatSelect,
     #[arg(short, long)]
+   // #[clap(conflicts_with="list_devices")]
     #[clap(value_hint = clap::ValueHint::DirPath)]
+    #[clap(conflicts_with("list_devices"))]
     path_dir: PathBuf,
-    //#[clap(value_hint = clap::ValueHint::)]
     #[arg(short, long)]
     #[structopt(default_value = "akasha")]
     name_prefix: String,
@@ -71,6 +72,7 @@ struct Args {
 }
 
 
+
 #[derive(Default)]
 struct Signals {
     sighup: Arc<AtomicBool>
@@ -78,16 +80,16 @@ struct Signals {
 
 
 pub struct ProgramState {
-    args: RwLock<Args>,
+    opt: RwLock<Opt>,
     time_of_start: RwLock<Instant>,
     signals: RwLock<Signals>,
     cpal_host: RwLock<cpal::Host>
 }
 
 impl ProgramState {
-    fn new(args: Args) -> Self {
+    fn new(opt: Opt) -> Self {
         Self {
-            args: RwLock::new(args),
+            opt: RwLock::new(opt),
             time_of_start: RwLock::new(Instant::now()),
             signals: RwLock::new(Signals::default()),
             cpal_host: RwLock::new(cpal::default_host())
@@ -107,7 +109,7 @@ async fn get_device_list(state: &ProgramState) -> Result<Vec<String>, Box<dyn er
 }
 
 
-fn streamgen_gen_file_path<A>(args: A) -> impl Stream<Item = PathBuf> where A: Deref<Target = Args> {
+fn streamgen_gen_file_path<A>(args: A) -> impl Stream<Item = PathBuf> where A: Deref<Target =Opt> {
     stream! {
         let now: DateTime<Local> = Local::now();
         let timestamp_string =
@@ -122,11 +124,11 @@ fn streamgen_gen_file_path<A>(args: A) -> impl Stream<Item = PathBuf> where A: D
 
 #[tokio::main]
 async fn main() {
-    let args = Args::parse();
+    let args = Opt::parse();
 
     let state = Arc::new(ProgramState::new(args));
 
-    if state.args.read().await.list_devices {
+    if state.opt.read().await.list_devices {
         match get_device_list(&state).await {
             Ok(list) => {
                 println!("{:#?}", list);
@@ -149,7 +151,7 @@ async fn main() {
         loop {
             let state_ptr = state.clone();
             let task_result = tokio::task::spawn_local(async move {
-                let args = state_ptr.args.read().await;
+                let args = state_ptr.opt.read().await;
                 if !args.path_dir.exists() {
                     std::fs::create_dir_all(&args.path_dir).expect("Failed to create path");
                 }
