@@ -119,7 +119,7 @@ impl VolumeStreamBuilder {
                         && builder.dur_of_display.is_some()
                         && builder.time_of_start.elapsed() >= builder.dur_of_display.unwrap()  {
                     display_enabled = false;
-                    println!("Display disabled.");
+                    println!("Display of microphone stream is disabled.");
                 }
 
                 if display_enabled && ( builder.every_n == 0 || (chunk_num % builder.every_n == 0) )  {
