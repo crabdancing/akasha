@@ -3,6 +3,7 @@
 // TODO: print db info as well as console indicator
 // TODO: toggle console indicator with spacebar
 // TODO: turn off console indicator with SIGHUP
+// TODO: fix --list-devices requiring --format and --path-dir
 
 mod write_audio;
 mod microphone;
@@ -13,7 +14,7 @@ mod display_volume;
 extern crate chrono;
 
 use std::borrow::Borrow;
-use std::io::Error;
+use std::error;
 use std::ops::Deref;
 use bigdurations::BigDurations;
 use chrono::{DateTime, Local};
@@ -29,6 +30,7 @@ use signal_hook::SigId;
 use tokio::sync::RwLock;
 use tokio::time::Instant;
 use clap_duration::duration_range_value_parse;
+use cpal::traits::{DeviceTrait, HostTrait};
 use duration_human::{DurationHuman, DurationHumanValidator};
 
 type Chunk = Vec<f32>;
@@ -64,7 +66,10 @@ struct Args {
     display_dur: Option<DurationHuman>,
     #[arg(long)]
     display: bool,
+    #[arg(long)]
+    list_devices: bool
 }
+
 
 #[derive(Default)]
 struct Signals {
@@ -75,7 +80,8 @@ struct Signals {
 pub struct ProgramState {
     args: RwLock<Args>,
     time_of_start: RwLock<Instant>,
-    signals: RwLock<Signals>
+    signals: RwLock<Signals>,
+    cpal_host: RwLock<cpal::Host>
 }
 
 impl ProgramState {
@@ -83,10 +89,23 @@ impl ProgramState {
         Self {
             args: RwLock::new(args),
             time_of_start: RwLock::new(Instant::now()),
-            signals: RwLock::new(Signals::default())
+            signals: RwLock::new(Signals::default()),
+            cpal_host: RwLock::new(cpal::default_host())
         }
     }
 }
+
+async fn get_device_list(state: &ProgramState) -> Result<Vec<String>, Box<dyn error::Error>> {
+    let mut out = Vec::new();
+    for device in state.cpal_host.read().await.input_devices()? {
+        match device.name() {
+            Ok(name) => out.push(name),
+            Err(_) => ()
+        }
+    }
+    Ok(out)
+}
+
 
 fn streamgen_gen_file_path<A>(args: A) -> impl Stream<Item = PathBuf> where A: Deref<Target = Args> {
     stream! {
@@ -106,6 +125,16 @@ async fn main() {
     let args = Args::parse();
 
     let state = Arc::new(ProgramState::new(args));
+
+    if state.args.read().await.list_devices {
+        match get_device_list(&state).await {
+            Ok(list) => {
+                println!("{:#?}", list);
+            }
+            Err(_) => ()
+        }
+        return;
+    }
 
     match signal_hook::flag::register(libc::SIGHUP, (&state.signals.write().await.sighup).clone()) {
         Ok(_) => {}
