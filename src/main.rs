@@ -164,6 +164,28 @@ async fn display_probe_info_if_requested(state: &ProgramState) -> Result<bool, B
     Ok(false)
 }
 
+async fn main_task(state: Arc<ProgramState>) {
+    let args = state.cli.read().await;
+    if !args.cmd.as_rec().unwrap().path_dir.exists() {
+        std::fs::create_dir_all(&args.cmd.as_rec().unwrap().path_dir).expect("Failed to create path");
+    }
+    // I clone everything because I don't care about lifetimes
+    let new_file_name_stream =
+        streamgen_gen_file_path(args);
+    pin_mut!(new_file_name_stream);
+
+    let result = record::record_segments(
+        new_file_name_stream,
+        state.clone()
+    ).await;
+    if let Err(_result) = result {
+        println!("Warning! Recording segment failed with error: {}", _result);
+        println!("Will attempt again in {} secs...", 30);
+        std::thread::sleep(Duration::from_secs(30));
+
+    }
+}
+
 #[tokio::main]
 async fn main() {
     let args = Cli::parse();
@@ -190,25 +212,7 @@ async fn main() {
         loop {
             let state_ptr = state.clone();
             let task_result = tokio::task::spawn_local(async move {
-                let args = state_ptr.cli.read().await;
-                if !args.cmd.as_rec().unwrap().path_dir.exists() {
-                    std::fs::create_dir_all(&args.cmd.as_rec().unwrap().path_dir).expect("Failed to create path");
-                }
-                // I clone everything because I don't care about lifetimes
-                let new_file_name_stream =
-                    streamgen_gen_file_path(args);
-                pin_mut!(new_file_name_stream);
-
-                let result = record::record_segments(
-                    new_file_name_stream,
-                    state_ptr.clone()
-                ).await;
-                if let Err(_result) = result {
-                    println!("Warning! Recording segment failed with error: {}", _result);
-                    println!("Will attempt again in {} secs...", 30);
-                    std::thread::sleep(Duration::from_secs(30));
-
-                }
+                main_task(state_ptr).await;
             }).await;
             if task_result.is_err() {
                 println!("Warning! Task result is error. Waiting 30 seconds before trying again.");
