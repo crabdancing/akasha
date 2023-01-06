@@ -208,12 +208,16 @@ async fn main() {
 
     let local = tokio::task::LocalSet::new();
 
+    // task is set inside a LocalSet to allow us to catch any bad API panicking
+    // ( C FFI libraries, I'm looking at you ;) )
+    // without making it impossible to use .await (as seems to be the case with catch_unwind)
     local.run_until(async move {
         loop {
             let state_ptr = state.clone();
             let task_result = tokio::task::spawn_local(async move {
                 main_task(state_ptr).await;
             }).await;
+
             if task_result.is_err() {
                 println!("Warning! Task result is error. Waiting 30 seconds before trying again.");
                 std::thread::sleep(Duration::from_secs(30));
