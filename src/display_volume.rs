@@ -1,4 +1,5 @@
 use std::error::Error;
+use std::fmt::{Display, Formatter};
 use std::iter::Sum;
 use std::ops::{Add, Div};
 use std::sync::Arc;
@@ -10,42 +11,59 @@ use crate::Chunk;
 use wide::*;
 use tokio::sync::Mutex;
 use tokio::time::Instant;
+use terminal_size::{Height, terminal_size, Width};
 
+// When I try to make these generic I get:
+// "type parameter `F` must be covered by another type when it appears before the first local type (`Db<F>`)"
+// No idea why :(
 
-#[derive(Default, derive_more::Into, derive_more::Add,
-    derive_more::Sub, derive_more::Mul, derive_more::Div, derive_more::Display)]
+#[derive(Default, Clone, derive_more::Into, derive_more::Add,
+    derive_more::Sub, derive_more::Mul, derive_more::Div)]
 pub struct Db(f32);
 
-#[derive(Default, derive_more::Into, derive_more::Add,
+#[derive(Default, Clone, derive_more::Into, derive_more::Add,
 derive_more::Sub, derive_more::Mul, derive_more::Div, derive_more::Display)]
-pub struct Percent(f32);
+pub struct NormRatio(f32);
 
+impl Display for Db {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "dB: {:06.2}", self.0)?;
+        Ok(())
+    }
+}
 
-impl Percent {
-    pub fn new(value: f32) -> Option<Percent> {
-        if value >= 0.0 && value <= 100.0 {
-            Some(Percent(value))
+// ChatGPT says 'normalized ratio' is the math term for something between 0 and 1, like this
+impl NormRatio {
+    pub fn new<F>(value: F) -> Option<NormRatio>  where F: Into<f32> + Copy {
+        let value: f32 = value.into();
+        if value >= 0.0 && value <= 1.0 {
+            Some(NormRatio(value))
         } else {
             None
         }
     }
 
-    fn new_clamped(value: f32) -> Percent {
-        Percent(value.clamp(0., 100.))
+    fn new_clamped<F>(value: F) -> NormRatio where F: Into<f32> + Copy {
+        NormRatio(value.into().clamp(0., 1.))
     }
 
     fn get(&self) -> f32 {
         self.0
     }
 
-    fn into_opt_percent(self) -> Option<Percent> {
+    fn replace<F>(&mut self, value: F) where F: Into<f32> + Copy {
+        let value: f32 = value.into();
+        self.0 = value.clamp(0., 1.);
+    }
+
+    fn into_opt_norm_ratio(self) -> Option<NormRatio> {
         self.into()
     }
 }
 
-impl Into<Percent> for Db {
-    fn into(self) -> Percent {
-        Percent::new_clamped(10f32.powf(self.0 / 10. ) * 100.)
+impl Into<NormRatio> for Db {
+    fn into(self) -> NormRatio {
+        NormRatio::new_clamped(10f32.powf(self.0 / 10. ) )
     }
 }
 
@@ -83,11 +101,12 @@ fn get_average_volume(samples: &Vec<f32>) -> Db {
 }
 
 
-pub fn sound_bar(p: &Percent) -> String {
-    let num_char: usize = 30;
-    let num_stars: usize = ((1000. * p.get() / 100. * 30.) % 30.) as usize;
+pub fn sound_bar(p: &NormRatio, bar_length: u16) -> String {
+    let num_char: f32 = bar_length as f32 - 2.;
+    let num_stars: usize = ((1000. * p.get() * num_char) % num_char) as usize;
+    let num_char_usize = num_char as usize;
     format!("[{}{}]", "*".repeat(num_stars).to_string(),
-            " ".repeat(num_char.saturating_sub(num_stars).saturating_sub(1)).to_string())
+            " ".repeat(num_char_usize.saturating_sub(num_stars).saturating_sub(1)).to_string())
 }
 
 #[derive(Clone)]
@@ -112,22 +131,42 @@ impl VolumeStreamBuilder {
     pub fn getstream_display_volume<S: Stream<Item = Chunk>>(&self, mic_audio_stream: S) -> impl Stream<Item = Chunk> {
         let builder = self.clone();
         let mut display_enabled = builder.enabled;
+
+        let get_bar_width = || {
+            let term_size = terminal_size();
+            match term_size {
+                // Seems to be 1 off for some reason, so I'm appending 1 here
+                Some((Width(w), Height(h))) => w + 1,
+                None => 30u16
+            }
+        };
+
+        let mut bar_length = get_bar_width();
+
         stream! {
             let mut chunk_num: u128 = u128::default();
             for await chunk in mic_audio_stream {
-                if display_enabled
-                        && builder.dur_of_display.is_some()
-                        && builder.time_of_start.elapsed() >= builder.dur_of_display.unwrap()  {
-                    display_enabled = false;
-                    println!("Display of microphone stream is disabled.");
-                }
+                if display_enabled {
+                    if builder.dur_of_display.is_some()
+                            && builder.time_of_start.elapsed() >= builder.dur_of_display.unwrap()  {
+                        display_enabled = false;
+                        println!("Display of microphone stream is disabled.");
+                    }
 
-                if display_enabled && ( builder.every_n == 0 || (chunk_num % builder.every_n == 0) )  {
-                    let p: Percent = get_average_volume(&chunk).into();
-                    println!("{}", sound_bar(&p));
+                    if ( builder.every_n == 0 || (chunk_num % builder.every_n == 0) )  {
+                        let db: Db = get_average_volume(&chunk);
+                        let db_string = db.to_string();
+                        let p: NormRatio = db.into();
+                        println!("{} {}", sound_bar(&p, bar_length - db_string.len() as u16 - 1), db_string);
+                    }
+
+                    if chunk_num % 10 == 0 {
+                        bar_length = get_bar_width();
+                    }
+
+                    chunk_num = chunk_num.saturating_add(1);
+                    yield chunk;
                 }
-                chunk_num = chunk_num.saturating_add(1);
-                yield chunk;
             }
         }
     }

@@ -171,13 +171,14 @@ async fn main() {
     let state = Arc::new(ProgramState::new(args));
 
     match display_probe_info_if_requested(&state).await {
+        Ok(quit_flag) => if quit_flag {
+            return; // goodbye :3
+        }
         _ => {},
     }
 
     match signal_hook::flag::register(libc::SIGHUP, (&state.signals.write().await.sighup).clone()) {
-        Ok(quit_flag) => {
-            return; // goodbye :3
-        }
+        Ok(_) => {},
         Err(_) => {
             println!("Warning: couldn't register signal: SIGHUP");
         }
