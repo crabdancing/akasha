@@ -34,7 +34,7 @@ use tokio::time::Instant;
 use clap_duration::{duration_range_validator, duration_range_value_parse};
 use cpal::traits::{DeviceTrait, HostTrait};
 use crossterm::{event, execute};
-use crossterm::event::Event;
+use crossterm::event::{Event, KeyEvent, KeyModifiers};
 use crossterm::style::Print;
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
 use duration_human::{DurationHuman, DurationHumanValidator};
@@ -42,6 +42,8 @@ use crate::FormatSelect::Ogg;
 use enum_as_inner::EnumAsInner;
 use tokio::runtime::Runtime;
 use std::io::stdout;
+use crossterm::event::KeyCode::Char;
+use crossterm::event::ModifierKeyCode::{LeftControl, RightControl};
 
 type Chunk = Vec<f32>;
 
@@ -154,7 +156,8 @@ pub struct ProgramState {
     time_of_start: RwLock<Instant>,
     signals: RwLock<Signals>,
     cpal_host: RwLock<cpal::Host>,
-    term_size: RwLock<TermSize>
+    term_size: RwLock<TermSize>,
+    quit_flag: RwLock<bool>
 }
 
 impl ProgramState {
@@ -164,7 +167,8 @@ impl ProgramState {
             time_of_start: RwLock::new(Instant::now()),
             signals: RwLock::new(Signals::default()),
             cpal_host: RwLock::new(cpal::default_host()),
-            term_size: RwLock::new(TermSize::query())
+            term_size: RwLock::new(TermSize::query()),
+            quit_flag: RwLock::new(false)
         }
     }
 }
@@ -239,6 +243,11 @@ async fn handle_signals(state: Arc<ProgramState>) -> Result<(), Box<dyn Error>> 
         Event::Resize(x, y) => {
             state.term_size.write().await.set_from_x_y(x, y);
         }
+        Event::Key(key) => {
+            if key.code == Char('d') && key.modifiers == KeyModifiers::CONTROL {
+                *state.quit_flag.write().await = true;
+            }
+        }
         _ => {}
     }
     Ok(())
@@ -257,7 +266,8 @@ async fn signal_thread(state: Arc<ProgramState>) {
 
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>>{
+async fn main() -> Result<(), Box<dyn Error>> {
+
     let args = Cli::parse();
     enable_raw_mode()?;
 
@@ -291,10 +301,10 @@ async fn main() -> Result<(), Box<dyn Error>>{
     // ( C FFI libraries, I'm looking at you ;) )
     // without making it impossible to use .await (as seems to be the case with catch_unwind)
     local.run_until(async move {
-        loop {
-            let state_ptr = state.clone();
+        while *state.quit_flag.read().await == false {
+            let state = state.clone();
             let task_result = tokio::task::spawn_local(async move {
-                main_task(state_ptr).await;
+                main_task(state).await;
             }).await;
 
             if task_result.is_err() {
