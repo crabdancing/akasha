@@ -166,7 +166,9 @@ impl QuitMsg {
     }
 
     async fn wait(&self) {
-        while *self.flag.read().await {}
+        while *self.flag.read().await {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
     }
 
     async fn send_quit(&self) {
@@ -294,8 +296,11 @@ async fn handle_signals(state: Arc<ProgramState>) -> Result<(), Box<dyn Error>> 
                 // as the read await can't be released until it's dropped, but it can't drop
                 // until the write completes.
                 // (And Rust refuses to let you read and write simultaneously)
-                let state_curr = *state.display.read().await;
-                *state.display.write().await = !state_curr;
+                let mut state_cur = *state.display.read().await;
+                state_cur = !state_cur;
+                *state.display.write().await = state_cur;
+                printrn!("Display state toggled to: {}", state_cur);
+
             }
             if (key.code == Char('d') && key.modifiers == KeyModifiers::CONTROL)
                 || key.code == KeyCode::Esc || key.code == Char('q') {
@@ -326,7 +331,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
     enable_raw_mode()?;
 
     let state = Arc::new(ProgramState::new(args));
-    pin_mut!(state);
 
     match display_probe_info_if_requested(&state).await {
         Ok(quit_flag) => if quit_flag {
