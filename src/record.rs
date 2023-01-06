@@ -41,7 +41,7 @@ pub async fn record_segments<S: Stream<Item = PathBuf> + Unpin>(
         volume_stream_builder_inst.enabled = state.cli.read().await.cmd.as_rec().unwrap().display;
         volume_stream_builder_inst.time_of_start = *state.time_of_start.read().await;
         let displayed_volume_stream = volume_stream_builder_inst.getstream_display_volume(
-            mic_input_stream, state.clone());
+            mic_input_stream, state.clone()).await;
         pin_mut!(displayed_volume_stream);
 
         let dur = state.cli.read().await.cmd.as_rec().unwrap().segment_dur;
