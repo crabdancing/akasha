@@ -42,7 +42,7 @@ use tokio::runtime::Runtime;
 use std::io::{stdout, Write};
 use crossterm::event::KeyCode::Char;
 use crossterm::event::ModifierKeyCode::{LeftControl, RightControl};
-use libc::wait;
+//use libc::wait;
 use tokio::sync::broadcast::error::RecvError;
 
 type Chunk = Vec<f32>;
@@ -109,6 +109,7 @@ enum ProbeOpts {
     OutputDevices
 }
 
+#[cfg(target_family = "unix")]
 #[derive(Default)]
 struct Signals {
     sighup: Arc<AtomicBool>
@@ -180,11 +181,12 @@ impl QuitMsg {
 pub struct ProgramState {
     cli: RwLock<Cli>,
     time_of_start: RwLock<Instant>,
-    signals: RwLock<Signals>,
     cpal_host: RwLock<cpal::Host>,
     term_size: RwLock<TermSize>,
     quit_msg: QuitMsg,
-    display: RwLock<bool>
+    display: RwLock<bool>,
+    #[cfg(target_family = "unix")]
+    signals: RwLock<Signals>,
 }
 
 impl ProgramState {
@@ -193,6 +195,7 @@ impl ProgramState {
         Self {
             cli: RwLock::new(cli),
             time_of_start: RwLock::new(Instant::now()),
+            #[cfg(target_family = "unix")]
             signals: RwLock::new(Signals::default()),
             cpal_host: RwLock::new(cpal::default_host()),
             term_size: RwLock::new(TermSize::query()),
@@ -340,12 +343,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
         _ => {},
     }
 
+    #[cfg(target_family = "unix")]
     match signal_hook::flag::register(libc::SIGHUP, (&state.signals.write().await.sighup).clone()) {
         Ok(_) => {},
         Err(_) => {
             printrn!("Warning: couldn't register signal: SIGHUP");
         }
     }
+
     let rt = Runtime::new().expect("Couldn't get runtime :(");
 
     let state_ptr = state.clone();
