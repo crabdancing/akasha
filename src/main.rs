@@ -1,9 +1,7 @@
 // TODO: find a library that is interoperable with the Orange Pi GPIO so that we can control an indicator light
 // TODO: more intelligent microphone device selection logic -- maybe use an argument to pass mic name?
-// TODO: print db info as well as console indicator
 // TODO: toggle console indicator with spacebar
 // TODO: turn off console indicator with SIGHUP
-// TODO: fix --list-devices requiring --format and --path-dir
 
 mod write_audio;
 mod microphone;
