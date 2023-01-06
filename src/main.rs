@@ -247,7 +247,7 @@ async fn skippable_sleep(dur: Duration, state: Arc<ProgramState>) {
     tokio::select! {
         _ = tokio::time::sleep(dur) => {}
         _ = state.quit_msg.wait() => {
-            printrn!("Sleep skipped by quit message!");
+            printrn!("Sleep skipped by quit!");
         }
     };
 }
