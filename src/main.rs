@@ -78,7 +78,8 @@ enum Commands {
 #[derive(clap::Args, Debug, Clone)]
 struct Probe {
     #[arg(long)]
-    probe_type: ProbeOpts
+    // the underscore is necessary here because `type` is already a reserved identifier >.<
+    type_: ProbeOpts
 }
 
 #[derive(clap::Args, Debug, Clone)]
@@ -228,7 +229,7 @@ fn streamgen_gen_file_path<A>(args: A) -> impl Stream<Item = PathBuf> where A: D
 
 async fn display_probe_info_if_requested(state: &ProgramState) -> Result<bool, Box<dyn Error>> {
     match state.cli.read().await.cmd.as_probe()
-        .ok_or("Probe command not selected")?.probe_type {
+        .ok_or("Probe command not selected")?.type_ {
         ProbeOpts::InputDevices => {
             match get_device_list(&state).await {
                 Ok(list) => {
