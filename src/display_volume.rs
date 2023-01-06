@@ -21,9 +21,6 @@ use crate::printrn;
     derive_more::Sub, derive_more::Mul, derive_more::Div)]
 pub struct Db(f32);
 
-#[derive(Default, Clone, derive_more::Into, derive_more::Add,
-derive_more::Sub, derive_more::Mul, derive_more::Div, derive_more::Display)]
-pub struct NormRatio(f32);
 
 impl Display for Db {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -31,6 +28,10 @@ impl Display for Db {
         Ok(())
     }
 }
+
+#[derive(Default, Clone, derive_more::Into, derive_more::Add,
+derive_more::Sub, derive_more::Mul, derive_more::Div, derive_more::Display)]
+pub struct NormRatio(f32);
 
 // ChatGPT says 'normalized ratio' is the math term for something between 0 and 1, like this
 impl NormRatio {
@@ -67,16 +68,12 @@ impl Into<NormRatio> for Db {
     }
 }
 
-
-
 fn avg8x(input: Vec<f32>) -> Vec<f32> {
     input.chunks_exact(8).map(|chunk| {
         let simd_chunk = f32x8::from(chunk);
         simd_chunk.reduce_add() / (chunk.len() as f32)
     }).collect()
 }
-
-
 
 fn get_average_volume(samples: &Vec<f32>) -> Db {
     // FIRST STEP: CALCULATE RMS
@@ -100,7 +97,6 @@ fn get_average_volume(samples: &Vec<f32>) -> Db {
     Db(20.0 * f32::log10(rms ))
 }
 
-
 pub fn sound_bar(p: &NormRatio, bar_length: u16) -> String {
     let num_char: f32 = bar_length as f32 - 2.;
     let num_stars: usize = ((1000. * p.get() * num_char) % num_char) as usize;
@@ -111,7 +107,6 @@ pub fn sound_bar(p: &NormRatio, bar_length: u16) -> String {
 
 #[derive(Clone)]
 pub struct VolumeStreamBuilder {
-    pub(crate) enabled: bool,
     pub(crate) time_of_start: Instant,
     pub(crate) dur_of_display: Option<Duration>,
     pub(crate) every_n: u128
@@ -121,7 +116,6 @@ pub struct VolumeStreamBuilder {
 impl VolumeStreamBuilder {
     pub fn new() -> Self {
         Self {
-            enabled: true,
             time_of_start: Instant::now(),
             dur_of_display: None,
             every_n: 0
@@ -130,16 +124,15 @@ impl VolumeStreamBuilder {
 
     pub async fn getstream_display_volume<S: Stream<Item = Chunk>>(&self, mic_audio_stream: S, state: Arc<ProgramState>) -> impl Stream<Item = Chunk> {
         let builder = self.clone();
-        let mut display_enabled = builder.enabled;
 
 
         stream! {
             let mut chunk_num: u128 = u128::default();
             for await chunk in mic_audio_stream {
-                if display_enabled {
+                if *state.display.read().await {
                     if builder.dur_of_display.is_some()
                             && builder.time_of_start.elapsed() >= builder.dur_of_display.unwrap()  {
-                        display_enabled = false;
+                        //*state.display.write().await = false;
                         printrn!("Display of microphone stream is disabled.");
                     }
 
@@ -150,10 +143,10 @@ impl VolumeStreamBuilder {
                         printrn!("{} {}", sound_bar(&p,
             state.term_size.read().await.x - db_string.len() as u16 - 1), db_string);
                     }
-
-                    chunk_num = chunk_num.saturating_add(1);
-                    yield chunk;
                 }
+
+                chunk_num = chunk_num.saturating_add(1);
+                yield chunk;
             }
         }
     }

@@ -1,6 +1,5 @@
 // TODO: find a library that is interoperable with the Orange Pi GPIO so that we can control an indicator light
 // TODO: more intelligent microphone device selection logic -- maybe use an argument to pass mic name?
-// TODO: toggle console indicator with spacebar
 // TODO: turn off console indicator with SIGHUP
 
 mod write_audio;
@@ -176,26 +175,27 @@ impl QuitMsg {
 
 }
 
-
-
 pub struct ProgramState {
     cli: RwLock<Cli>,
     time_of_start: RwLock<Instant>,
     signals: RwLock<Signals>,
     cpal_host: RwLock<cpal::Host>,
     term_size: RwLock<TermSize>,
-    quit_msg: QuitMsg
+    quit_msg: QuitMsg,
+    display: RwLock<bool>
 }
 
 impl ProgramState {
     fn new(cli: Cli) -> Self {
+        let display = match cli.cmd.as_rec() { Some(r) => r.display, None => false };
         Self {
             cli: RwLock::new(cli),
             time_of_start: RwLock::new(Instant::now()),
             signals: RwLock::new(Signals::default()),
             cpal_host: RwLock::new(cpal::default_host()),
             term_size: RwLock::new(TermSize::query()),
-            quit_msg: QuitMsg::new()
+            quit_msg: QuitMsg::new(),
+            display: RwLock::new(display)
         }
     }
 }
@@ -264,7 +264,7 @@ async fn main_task(state: Arc<ProgramState>) {
     if !args.cmd.as_rec().unwrap().path_dir.exists() {
         std::fs::create_dir_all(&args.cmd.as_rec().unwrap().path_dir).expect("Failed to create path");
     }
-    // I clone everything because I don't care about lifetimes
+
     let new_file_name_stream =
         streamgen_gen_file_path(args);
     pin_mut!(new_file_name_stream);
@@ -286,8 +286,19 @@ async fn handle_signals(state: Arc<ProgramState>) -> Result<(), Box<dyn Error>> 
             state.term_size.write().await.set_from_x_y(x, y);
         }
         Event::Key(key) => {
+            if key.code == Char('t') {
+                // Toggle display
+                // NOTE: NEVER DO SOMETHING LIKE THIS:
+                // *state.display.write().await = !*state.display.read().await;
+                // It will cause a deadlock halting any awaits anywhere else in the program,
+                // as the read await can't be released until it's dropped, but it can't drop
+                // until the write completes.
+                // (And Rust refuses to let you read and write simultaneously)
+                let state_curr = *state.display.read().await;
+                *state.display.write().await = !state_curr;
+            }
             if (key.code == Char('d') && key.modifiers == KeyModifiers::CONTROL)
-                || key.code == KeyCode::Esc {
+                || key.code == KeyCode::Esc || key.code == Char('q') {
                 state.quit_msg.send_quit().await;
             }
         }

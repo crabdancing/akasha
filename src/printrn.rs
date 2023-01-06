@@ -1,3 +1,4 @@
+// This is needed because of crossterm weirdness.
 #[macro_export]
 macro_rules! printrn {
     () => {
