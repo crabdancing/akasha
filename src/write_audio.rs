@@ -8,6 +8,7 @@ use async_stream::stream;
 use futures_core::Stream;
 use futures_util::StreamExt;
 use hound::{WavSpec, WavWriter};
+use tokio::sync::RwLock;
 use vorbis_rs::VorbisEncoder;
 
 use crate::printrn;
@@ -83,7 +84,7 @@ pub async fn write_to_wav<S: Stream<Item = Vec<f32>> + Unpin>(
         for sample in chunk.as_slice() {
             wav_writer.write_sample(*sample)?;
         }
-        if time_at_start.elapsed() >= *segment_dur {
+        if time_at_start.elapsed() >= *segment_dur  {
             break;
         }
     }

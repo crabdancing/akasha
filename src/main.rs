@@ -34,7 +34,7 @@ use tokio::time::Instant;
 use clap_duration::{duration_range_validator, duration_range_value_parse};
 use cpal::traits::{DeviceTrait, HostTrait};
 use crossterm::{event, execute};
-use crossterm::event::{Event, KeyEvent, KeyModifiers};
+use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use crossterm::style::Print;
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
 use duration_human::{DurationHuman, DurationHumanValidator};
@@ -244,10 +244,12 @@ async fn handle_signals(state: Arc<ProgramState>) -> Result<(), Box<dyn Error>> 
             state.term_size.write().await.set_from_x_y(x, y);
         }
         Event::Key(key) => {
-            if key.code == Char('d') && key.modifiers == KeyModifiers::CONTROL {
+            if (key.code == Char('d') && key.modifiers == KeyModifiers::CONTROL)
+                || key.code == KeyCode::Esc {
                 *state.quit_flag.write().await = true;
             }
         }
+        // Unknown event, ignore
         _ => {}
     }
     Ok(())

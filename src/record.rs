@@ -30,7 +30,7 @@ pub async fn record_segments<S: Stream<Item = PathBuf> + Unpin>(
 
         printrn!("Current sample rate: {}", config.sample_rate.0);
 
-        let mic_input_stream  = microphone::getstream_mic_input(config.clone(), input_device);
+        let mic_input_stream  = microphone::getstream_mic_input(config.clone(), input_device, state.clone());
         pin_mut!(mic_input_stream);
 
         let mut volume_stream_builder_inst = display_volume::VolumeStreamBuilder::new();
