@@ -159,7 +159,7 @@ pub struct QuitMsg {
 impl QuitMsg {
     fn new() -> Self {
         Self {
-            flag: RwLock::new(false)
+            flag: RwLock::new(true)
         }
     }
 
@@ -168,13 +168,11 @@ impl QuitMsg {
     }
 
     async fn wait(&self) {
-        while !*self.flag.read().await {
-
-        }
+        while *self.flag.read().await {}
     }
 
     async fn send_quit(&self) {
-        *self.flag.write().await = true;
+        *self.flag.write().await = false;
     }
 
 }
