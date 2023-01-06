@@ -16,6 +16,7 @@ pub fn getstream_mic_input(
     state: Arc<ProgramState>) -> impl Stream<Item = Chunk> {
 
     stream! {
+        let state = state.clone();
         let (tx, rx) = mpsc::channel::<Chunk>();
 
         let input_stream = cpal::Device::build_input_stream(
@@ -27,7 +28,7 @@ pub fn getstream_mic_input(
 
         for data in rx {
             yield data;
-            if *state.quit_flag.read().await {
+            if state.quit_msg.poll() {
                 break;
             }
         }

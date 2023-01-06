@@ -63,6 +63,9 @@ pub async fn record_segments<S: Stream<Item = PathBuf> + Unpin>(
                     &segment_dur).await?;
             }
         }
+        if state.quit_msg.poll() {
+            break;
+        }
     }
     Ok(paths)
 }

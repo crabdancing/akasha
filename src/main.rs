@@ -17,6 +17,7 @@ extern crate chrono;
 use std::borrow::Borrow;
 use std::{error, thread};
 use std::error::Error;
+use std::future::Future;
 use std::ops::Deref;
 use bigdurations::BigDurations;
 use chrono::{DateTime, Local};
@@ -41,9 +42,11 @@ use duration_human::{DurationHuman, DurationHumanValidator};
 use crate::FormatSelect::Ogg;
 use enum_as_inner::EnumAsInner;
 use tokio::runtime::Runtime;
-use std::io::stdout;
+use std::io::{stdout, Write};
 use crossterm::event::KeyCode::Char;
 use crossterm::event::ModifierKeyCode::{LeftControl, RightControl};
+use libc::wait;
+use tokio::sync::broadcast::error::RecvError;
 
 type Chunk = Vec<f32>;
 
@@ -149,6 +152,35 @@ impl TermSize {
     }
 }
 
+pub struct QuitMsg {
+    tx: tokio::sync::broadcast::Sender<()>,
+    rx: tokio::sync::broadcast::Receiver<()>
+}
+
+impl QuitMsg {
+    fn new() -> Self {
+        match tokio::sync::broadcast::channel(1) {
+            (tx, rx) => Self { tx, rx }
+        }
+    }
+
+    fn poll(&self) -> bool {
+        // Lifehack: this way, it doesn't need write
+        self.rx.is_empty()
+    }
+
+    async unsafe fn wait(&mut self) {
+        // Lifehack: this way, it doesn't need write
+        self.rx.recv().await.unwrap()
+    }
+
+    fn send_quit(&self) {
+        // slight chance of Fast Quit (TM)
+        self.tx.send(()).unwrap();
+    }
+
+}
+
 
 
 pub struct ProgramState {
@@ -157,7 +189,7 @@ pub struct ProgramState {
     signals: RwLock<Signals>,
     cpal_host: RwLock<cpal::Host>,
     term_size: RwLock<TermSize>,
-    quit_flag: RwLock<bool>
+    quit_msg: QuitMsg
 }
 
 impl ProgramState {
@@ -168,7 +200,7 @@ impl ProgramState {
             signals: RwLock::new(Signals::default()),
             cpal_host: RwLock::new(cpal::default_host()),
             term_size: RwLock::new(TermSize::query()),
-            quit_flag: RwLock::new(false)
+            quit_msg: QuitMsg::new()
         }
     }
 }
@@ -215,6 +247,20 @@ async fn display_probe_info_if_requested(state: &ProgramState) -> Result<bool, B
     Ok(false)
 }
 
+async fn wait_between_errors(state: Arc<ProgramState>, err: Box<dyn Error>) {
+    let wait_time = 30;
+    printrn!("Warning! Recording segment failed with error: {}", err);
+    printrn!("Will attempt again in {} secs...", wait_time);
+    tokio::select! {
+        _ = tokio::time::sleep(Duration::from_secs(wait_time)) => {
+
+        }
+        _ = state.quit_msg.wait() => {
+
+        }
+    };
+}
+
 async fn main_task(state: Arc<ProgramState>) {
     let args = state.cli.read().await;
     if !args.cmd.as_rec().unwrap().path_dir.exists() {
@@ -229,6 +275,7 @@ async fn main_task(state: Arc<ProgramState>) {
         new_file_name_stream,
         state.clone()
     ).await;
+
     if let Err(_result) = result {
         printrn!("Warning! Recording segment failed with error: {}", _result);
         printrn!("Will attempt again in {} secs...", 30);
@@ -246,7 +293,7 @@ async fn handle_signals(state: Arc<ProgramState>) -> Result<(), Box<dyn Error>> 
         Event::Key(key) => {
             if (key.code == Char('d') && key.modifiers == KeyModifiers::CONTROL)
                 || key.code == KeyCode::Esc {
-                *state.quit_flag.write().await = true;
+                state.quit_msg.send_quit();
             }
         }
         // Unknown event, ignore
@@ -303,7 +350,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // ( C FFI libraries, I'm looking at you ;) )
     // without making it impossible to use .await (as seems to be the case with catch_unwind)
     local.run_until(async move {
-        while *state.quit_flag.read().await == false {
+        while state.quit_msg.poll() {
             let state = state.clone();
             let task_result = tokio::task::spawn_local(async move {
                 main_task(state).await;
