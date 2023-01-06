@@ -14,7 +14,7 @@ mod display_volume;
 extern crate chrono;
 
 use std::borrow::Borrow;
-use std::error;
+use std::{error, thread};
 use std::error::Error;
 use std::ops::Deref;
 use bigdurations::BigDurations;
@@ -32,9 +32,13 @@ use tokio::sync::RwLock;
 use tokio::time::Instant;
 use clap_duration::{duration_range_validator, duration_range_value_parse};
 use cpal::traits::{DeviceTrait, HostTrait};
+use crossterm::event;
+use crossterm::event::Event;
+use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
 use duration_human::{DurationHuman, DurationHumanValidator};
 use crate::FormatSelect::Ogg;
 use enum_as_inner::EnumAsInner;
+use tokio::runtime::Runtime;
 
 type Chunk = Vec<f32>;
 
@@ -104,11 +108,50 @@ struct Signals {
     sighup: Arc<AtomicBool>
 }
 
+#[derive(Default)]
+struct TermSize {
+    x: u16,
+    y: u16
+}
+
+impl TermSize {
+    fn query() -> Self {
+        match crossterm::terminal::size() {
+            Ok((x, y)) => Self {x, y},
+            _ => TermSize::default()
+        }
+    }
+
+    fn from_tuple((x, y): (u16, u16)) -> Self {
+        Self {
+            x, y
+        }
+    }
+
+    fn from_x_y(x: u16, y: u16) -> Self {
+        Self {
+            x, y
+        }
+    }
+
+    fn set_from_x_y(&mut self, x: u16, y: u16) {
+        self.x = x;
+        self.y = y;
+    }
+
+    fn as_tuple(&self) -> (u16, u16) {
+        (self.x, self.y)
+    }
+}
+
+
+
 pub struct ProgramState {
     cli: RwLock<Cli>,
     time_of_start: RwLock<Instant>,
     signals: RwLock<Signals>,
-    cpal_host: RwLock<cpal::Host>
+    cpal_host: RwLock<cpal::Host>,
+    term_size: RwLock<TermSize>
 }
 
 impl ProgramState {
@@ -117,7 +160,8 @@ impl ProgramState {
             cli: RwLock::new(cli),
             time_of_start: RwLock::new(Instant::now()),
             signals: RwLock::new(Signals::default()),
-            cpal_host: RwLock::new(cpal::default_host())
+            cpal_host: RwLock::new(cpal::default_host()),
+            term_size: RwLock::new(TermSize::query())
         }
     }
 }
@@ -186,15 +230,43 @@ async fn main_task(state: Arc<ProgramState>) {
     }
 }
 
+
+async fn handle_signals(state: Arc<ProgramState>) -> Result<(), Box<dyn Error>> {
+    match event::read()? {
+        Event::Resize(x, y) => {
+            state.term_size.write().await.set_from_x_y(x, y);
+            println!("x");
+        }
+        _ => {
+            println!("Eventy");
+        }
+    }
+    Ok(())
+}
+
+async fn signal_thread(state: Arc<ProgramState>) {
+    loop {
+        match handle_signals(state.clone()).await {
+            Err(_) => {
+                println!("Warning! Error in signal handler function");
+            }
+            Ok(_) => {}
+        };
+    }
+}
+
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), Box<dyn Error>>{
     let args = Cli::parse();
+    enable_raw_mode()?;
 
     let state = Arc::new(ProgramState::new(args));
+    pin_mut!(state);
 
     match display_probe_info_if_requested(&state).await {
         Ok(quit_flag) => if quit_flag {
-            return; // goodbye :3
+            disable_raw_mode()?;
+            return Ok(()); // goodbye :3
         }
         _ => {},
     }
@@ -205,6 +277,12 @@ async fn main() {
             println!("Warning: couldn't register signal: SIGHUP");
         }
     }
+    let rt = Runtime::new().expect("Couldn't get runtime :(");
+
+    let state_ptr = state.clone();
+    let _signal_thread_handle = thread::spawn(move || {
+        rt.block_on(signal_thread(state_ptr))
+    });
 
     let local = tokio::task::LocalSet::new();
 
@@ -225,4 +303,8 @@ async fn main() {
             }
         }
     }).await;
+
+    disable_raw_mode()?;
+
+    Ok(())
 }

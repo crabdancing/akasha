@@ -7,7 +7,7 @@ use async_stream::stream;
 use std::time::{Duration};
 use futures_core::stream::Stream;
 use futures_util::StreamExt;
-use crate::Chunk;
+use crate::{Chunk, ProgramState};
 use wide::*;
 use tokio::sync::Mutex;
 use tokio::time::Instant;
@@ -128,20 +128,10 @@ impl VolumeStreamBuilder {
         }
     }
 
-    pub fn getstream_display_volume<S: Stream<Item = Chunk>>(&self, mic_audio_stream: S) -> impl Stream<Item = Chunk> {
+    pub async fn getstream_display_volume<S: Stream<Item = Chunk>>(&self, mic_audio_stream: S, state: Arc<ProgramState>) -> impl Stream<Item = Chunk> {
         let builder = self.clone();
         let mut display_enabled = builder.enabled;
 
-        let get_bar_width = || {
-            let term_size = terminal_size();
-            match term_size {
-                // Seems to be 1 off for some reason, so I'm appending 1 here
-                Some((Width(w), Height(h))) => w + 1,
-                None => 30u16
-            }
-        };
-
-        let mut bar_length = get_bar_width();
 
         stream! {
             let mut chunk_num: u128 = u128::default();
@@ -157,11 +147,8 @@ impl VolumeStreamBuilder {
                         let db: Db = get_average_volume(&chunk);
                         let db_string = db.to_string();
                         let p: NormRatio = db.into();
-                        println!("{} {}", sound_bar(&p, bar_length - db_string.len() as u16 - 1), db_string);
-                    }
-
-                    if chunk_num % 10 == 0 {
-                        bar_length = get_bar_width();
+                        println!("{} {}", sound_bar(&p,
+            state.term_size.read().await.y - db_string.len() as u16 - 1), db_string);
                     }
 
                     chunk_num = chunk_num.saturating_add(1);

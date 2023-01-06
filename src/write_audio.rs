@@ -59,7 +59,7 @@ pub async fn write_to_ogg<S: Stream<Item = Chunk> + Unpin>(
     Ok(mic_input_stream)
 }
 
-pub async fn write_to_wav<S: Stream<Item = Chunk> + Unpin>(
+pub async fn write_to_wav<S: Stream<Item = Vec<f32>> + Unpin>(
     path: &PathBuf,
     mut mic_input_stream: S,
     config: &cpal::StreamConfig,
