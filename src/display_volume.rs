@@ -11,7 +11,6 @@ use crate::{Chunk, ProgramState};
 use wide::*;
 use tokio::sync::Mutex;
 use tokio::time::Instant;
-use terminal_size::{Height, terminal_size, Width};
 use crate::printrn;
 
 // When I try to make these generic I get:
