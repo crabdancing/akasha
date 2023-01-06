@@ -164,7 +164,7 @@ impl QuitMsg {
     }
 
     async fn poll(&self) -> bool {
-        self.flag.read().await.clone()
+        !self.flag.read().await.clone()
     }
 
     async fn wait(&self) {
@@ -243,21 +243,24 @@ async fn display_probe_info_if_requested(state: &ProgramState) -> Result<bool, B
     Ok(false)
 }
 
-async fn wait_between_errors(state: Arc<ProgramState>, err: Box<dyn Error>) {
-    let wait_time = 30;
-    printrn!("Warning! Recording segment failed with error: {}", err);
-    printrn!("Will attempt again in {} secs...", wait_time);
+async fn skippable_sleep(dur: Duration, state: Arc<ProgramState>) {
     tokio::select! {
-        _ = tokio::time::sleep(Duration::from_secs(wait_time)) => {
-
-        }
+        _ = tokio::time::sleep(dur) => {}
         _ = state.quit_msg.wait() => {
-
+            printrn!("Sleep skipped by quit message!");
         }
     };
 }
 
+async fn wait_between_errors(state: Arc<ProgramState>, err: Box<dyn Error>) {
+    let wait_time = 30;
+    printrn!("Warning! Recording segment failed with error: {}", err);
+    printrn!("Will attempt again in {} secs...", wait_time);
+    skippable_sleep(Duration::from_secs(wait_time), state.clone()).await;
+}
+
 async fn main_task(state: Arc<ProgramState>) {
+
     let args = state.cli.read().await;
     if !args.cmd.as_rec().unwrap().path_dir.exists() {
         std::fs::create_dir_all(&args.cmd.as_rec().unwrap().path_dir).expect("Failed to create path");
@@ -272,11 +275,8 @@ async fn main_task(state: Arc<ProgramState>) {
         state.clone()
     ).await;
 
-    if let Err(_result) = result {
-        printrn!("Warning! Recording segment failed with error: {}", _result);
-        printrn!("Will attempt again in {} secs...", 30);
-        std::thread::sleep(Duration::from_secs(30));
-
+    if let Err(e) = result {
+        wait_between_errors(state.clone(), e.into()).await;
     }
 }
 
@@ -312,7 +312,6 @@ async fn signal_thread(state: Arc<ProgramState>) {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-
     let args = Cli::parse();
     enable_raw_mode()?;
 
@@ -346,7 +345,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // ( C FFI libraries, I'm looking at you ;) )
     // without making it impossible to use .await (as seems to be the case with catch_unwind)
     local.run_until(async move {
-        while state.quit_msg.poll().await {
+        while !state.quit_msg.poll().await {
             let state_ptr1 = state.clone();
             let task_result = tokio::task::spawn_local(async move {
                 main_task(state_ptr1).await;
