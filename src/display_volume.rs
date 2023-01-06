@@ -12,6 +12,7 @@ use wide::*;
 use tokio::sync::Mutex;
 use tokio::time::Instant;
 use terminal_size::{Height, terminal_size, Width};
+use crate::printrn;
 
 // When I try to make these generic I get:
 // "type parameter `F` must be covered by another type when it appears before the first local type (`Db<F>`)"
@@ -140,15 +141,15 @@ impl VolumeStreamBuilder {
                     if builder.dur_of_display.is_some()
                             && builder.time_of_start.elapsed() >= builder.dur_of_display.unwrap()  {
                         display_enabled = false;
-                        println!("Display of microphone stream is disabled.");
+                        printrn!("Display of microphone stream is disabled.");
                     }
 
                     if ( builder.every_n == 0 || (chunk_num % builder.every_n == 0) )  {
                         let db: Db = get_average_volume(&chunk);
                         let db_string = db.to_string();
                         let p: NormRatio = db.into();
-                        println!("{} {}", sound_bar(&p,
-            state.term_size.read().await.y - db_string.len() as u16 - 1), db_string);
+                        printrn!("{} {}", sound_bar(&p,
+            state.term_size.read().await.x - db_string.len() as u16 - 1), db_string);
                     }
 
                     chunk_num = chunk_num.saturating_add(1);

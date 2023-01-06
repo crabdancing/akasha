@@ -5,6 +5,8 @@ use cpal::traits::DeviceTrait;
 use cpal::traits::StreamTrait;
 use std::sync::mpsc;
 
+use crate::printrn;
+
 
 pub fn getstream_mic_input(
     config: cpal::StreamConfig,
@@ -23,7 +25,7 @@ pub fn getstream_mic_input(
         for data in rx {
             yield data;
         }
-        println!("Stream ended!");
+        printrn!("Stream ended!");
 
     }
 }

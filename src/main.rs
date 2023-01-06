@@ -10,6 +10,7 @@ mod microphone;
 mod record;
 mod bigdurations;
 mod display_volume;
+mod printrn;
 
 extern crate chrono;
 
@@ -199,7 +200,7 @@ async fn display_probe_info_if_requested(state: &ProgramState) -> Result<bool, B
         ProbeOpts::InputDevices => {
             match get_device_list(&state).await {
                 Ok(list) => {
-                    println!("{:#?}", list);
+                    printrn!("{:#?}", list);
                 }
                 Err(_) => ()
             }
@@ -225,8 +226,8 @@ async fn main_task(state: Arc<ProgramState>) {
         state.clone()
     ).await;
     if let Err(_result) = result {
-        println!("Warning! Recording segment failed with error: {}", _result);
-        println!("Will attempt again in {} secs...", 30);
+        printrn!("Warning! Recording segment failed with error: {}", _result);
+        printrn!("Will attempt again in {} secs...", 30);
         std::thread::sleep(Duration::from_secs(30));
 
     }
@@ -237,11 +238,8 @@ async fn handle_signals(state: Arc<ProgramState>) -> Result<(), Box<dyn Error>> 
     match event::read()? {
         Event::Resize(x, y) => {
             state.term_size.write().await.set_from_x_y(x, y);
-            println!("x");
         }
-        _ => {
-            println!("Eventy");
-        }
+        _ => {}
     }
     Ok(())
 }
@@ -250,78 +248,64 @@ async fn signal_thread(state: Arc<ProgramState>) {
     loop {
         match handle_signals(state.clone()).await {
             Err(_) => {
-                println!("Warning! Error in signal handler function");
+                printrn!("Warning! Error in signal handler function");
             }
             Ok(_) => {}
         };
     }
 }
 
-macro_rules! my_format {
-    ($fmt:expr) => (format!($fmt));
-    ($fmt:expr, $($arg:tt)*) => (format!($fmt, $($arg)*));
-}
-
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>>{
+    let args = Cli::parse();
     enable_raw_mode()?;
-    execute!(stdout(),
-    Print("uwu\r\n"),
-    Print("uwu\r\n"),
-    Print("uwu\r\n"),
-    Print("uwu\r\n"),
-    Print("uwu\r\n")
-    );
+
+    let state = Arc::new(ProgramState::new(args));
+    pin_mut!(state);
+
+    match display_probe_info_if_requested(&state).await {
+        Ok(quit_flag) => if quit_flag {
+            disable_raw_mode()?;
+            return Ok(()); // goodbye :3
+        }
+        _ => {},
+    }
+
+    match signal_hook::flag::register(libc::SIGHUP, (&state.signals.write().await.sighup).clone()) {
+        Ok(_) => {},
+        Err(_) => {
+            printrn!("Warning: couldn't register signal: SIGHUP");
+        }
+    }
+    let rt = Runtime::new().expect("Couldn't get runtime :(");
+
+    let state_ptr = state.clone();
+    let _signal_thread_handle = thread::spawn(move || {
+        rt.block_on(signal_thread(state_ptr))
+    });
+
+    let local = tokio::task::LocalSet::new();
+
+    // task is set inside a LocalSet to allow us to catch any bad API panicking
+    // ( C FFI libraries, I'm looking at you ;) )
+    // without making it impossible to use .await (as seems to be the case with catch_unwind)
+    local.run_until(async move {
+        loop {
+            let state_ptr = state.clone();
+            let task_result = tokio::task::spawn_local(async move {
+                main_task(state_ptr).await;
+            }).await;
+
+            if task_result.is_err() {
+                printrn!("Warning! Task result is error. Waiting 30 seconds before trying again.");
+                std::thread::sleep(Duration::from_secs(30));
+
+            }
+        }
+    }).await;
+
+    disable_raw_mode()?;
+
     Ok(())
-    // let args = Cli::parse();
-    // enable_raw_mode()?;
-    //
-    // let state = Arc::new(ProgramState::new(args));
-    // pin_mut!(state);
-    //
-    // match display_probe_info_if_requested(&state).await {
-    //     Ok(quit_flag) => if quit_flag {
-    //         disable_raw_mode()?;
-    //         return Ok(()); // goodbye :3
-    //     }
-    //     _ => {},
-    // }
-    //
-    // match signal_hook::flag::register(libc::SIGHUP, (&state.signals.write().await.sighup).clone()) {
-    //     Ok(_) => {},
-    //     Err(_) => {
-    //         println!("Warning: couldn't register signal: SIGHUP");
-    //     }
-    // }
-    // let rt = Runtime::new().expect("Couldn't get runtime :(");
-    //
-    // let state_ptr = state.clone();
-    // let _signal_thread_handle = thread::spawn(move || {
-    //     rt.block_on(signal_thread(state_ptr))
-    // });
-    //
-    // let local = tokio::task::LocalSet::new();
-    //
-    // // task is set inside a LocalSet to allow us to catch any bad API panicking
-    // // ( C FFI libraries, I'm looking at you ;) )
-    // // without making it impossible to use .await (as seems to be the case with catch_unwind)
-    // local.run_until(async move {
-    //     loop {
-    //         let state_ptr = state.clone();
-    //         let task_result = tokio::task::spawn_local(async move {
-    //             main_task(state_ptr).await;
-    //         }).await;
-    //
-    //         if task_result.is_err() {
-    //             println!("Warning! Task result is error. Waiting 30 seconds before trying again.");
-    //             std::thread::sleep(Duration::from_secs(30));
-    //
-    //         }
-    //     }
-    // }).await;
-    //
-    // disable_raw_mode()?;
-    //
-    // Ok(())
 }

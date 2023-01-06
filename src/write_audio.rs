@@ -10,6 +10,8 @@ use futures_util::StreamExt;
 use hound::{WavSpec, WavWriter};
 use vorbis_rs::VorbisEncoder;
 
+use crate::printrn;
+
 use crate::Chunk;
 
 fn set_extension_if_none(p: &mut PathBuf, ext: &str) {
@@ -29,14 +31,14 @@ pub async fn write_to_ogg<S: Stream<Item = Chunk> + Unpin>(
     -> Result<S, Box<dyn Error>> {
     let mut p = path.clone();
     set_extension_if_none(&mut p, "ogg");
-    println!("Begin writing to OGG...");
+    printrn!("Begin writing to OGG...");
     let tags: Vec<(String, String)> = Vec::new();
     let brmgmt = vorbis_rs::VorbisBitrateManagementStrategy::Vbr {
         target_bitrate:  NonZeroU32::new(128_000)
             .ok_or("could not cast target_bitrate as NonZeroU32")?
     };
     let f = File::create(p).expect("Could not create file!");
-    println!("{}", config.sample_rate.0);
+    printrn!("{}", config.sample_rate.0);
     let start_vorbis_encoder = VorbisEncoder::new(
         0,
         tags.into_iter(),
