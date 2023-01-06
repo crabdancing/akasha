@@ -153,30 +153,28 @@ impl TermSize {
 }
 
 pub struct QuitMsg {
-    tx: tokio::sync::broadcast::Sender<()>,
-    rx: tokio::sync::broadcast::Receiver<()>
+    flag: RwLock<bool>
 }
 
 impl QuitMsg {
     fn new() -> Self {
-        match tokio::sync::broadcast::channel(1) {
-            (tx, rx) => Self { tx, rx }
+        Self {
+            flag: RwLock::new(false)
         }
     }
 
-    fn poll(&self) -> bool {
-        // Lifehack: this way, it doesn't need write
-        self.rx.is_empty()
+    async fn poll(&self) -> bool {
+        self.flag.read().await.clone()
     }
 
-    async unsafe fn wait(&mut self) {
-        // Lifehack: this way, it doesn't need write
-        self.rx.recv().await.unwrap()
+    async fn wait(&self) {
+        while !*self.flag.read().await {
+
+        }
     }
 
-    fn send_quit(&self) {
-        // slight chance of Fast Quit (TM)
-        self.tx.send(()).unwrap();
+    async fn send_quit(&self) {
+        *self.flag.write().await = true;
     }
 
 }
@@ -293,7 +291,7 @@ async fn handle_signals(state: Arc<ProgramState>) -> Result<(), Box<dyn Error>> 
         Event::Key(key) => {
             if (key.code == Char('d') && key.modifiers == KeyModifiers::CONTROL)
                 || key.code == KeyCode::Esc {
-                state.quit_msg.send_quit();
+                state.quit_msg.send_quit().await;
             }
         }
         // Unknown event, ignore
@@ -350,16 +348,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // ( C FFI libraries, I'm looking at you ;) )
     // without making it impossible to use .await (as seems to be the case with catch_unwind)
     local.run_until(async move {
-        while state.quit_msg.poll() {
-            let state = state.clone();
+        while state.quit_msg.poll().await {
+            let state_ptr1 = state.clone();
             let task_result = tokio::task::spawn_local(async move {
-                main_task(state).await;
+                main_task(state_ptr1).await;
             }).await;
 
-            if task_result.is_err() {
-                printrn!("Warning! Task result is error. Waiting 30 seconds before trying again.");
-                std::thread::sleep(Duration::from_secs(30));
-
+            let state_ptr2 = state.clone();
+            match task_result {
+                Ok(_) => {}
+                Err(e) => wait_between_errors(state_ptr2, e.into()).await
             }
         }
     }).await;

@@ -28,7 +28,7 @@ pub fn getstream_mic_input(
 
         for data in rx {
             yield data;
-            if state.quit_msg.poll() {
+            if state.quit_msg.poll().await {
                 break;
             }
         }
