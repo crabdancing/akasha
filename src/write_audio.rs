@@ -39,7 +39,6 @@ pub async fn write_to_ogg<S: Stream<Item = Chunk> + Unpin>(
             .ok_or("could not cast target_bitrate as NonZeroU32")?
     };
     let f = File::create(p).expect("Could not create file!");
-    printrn!("{}", config.sample_rate.0);
     let start_vorbis_encoder = VorbisEncoder::new(
         0,
         tags.into_iter(),
