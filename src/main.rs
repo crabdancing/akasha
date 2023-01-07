@@ -40,10 +40,13 @@ use crate::FormatSelect::Ogg;
 use enum_as_inner::EnumAsInner;
 use tokio::runtime::Runtime;
 use std::io::{stdout, Write};
+use crossterm::event::Event::Key;
 use crossterm::event::KeyCode::Char;
 use crossterm::event::ModifierKeyCode::{LeftControl, RightControl};
+use libc::SIGSTOP;
 //use libc::wait;
 use tokio::sync::broadcast::error::RecvError;
+use signal_hook::low_level;
 
 type Chunk = Vec<f32>;
 
@@ -305,9 +308,13 @@ async fn handle_signals(state: Arc<ProgramState>) -> Result<(), Box<dyn Error>> 
                 printrn!("Display state toggled to: {}", state_cur);
 
             }
-            if (key.code == Char('d') && key.modifiers == KeyModifiers::CONTROL)
-                || key.code == KeyCode::Esc || key.code == Char('q') {
-                state.quit_msg.send_quit().await;
+            if key.modifiers == KeyModifiers::CONTROL {
+                if key.code == Char('c') || key.code == Char('d'){
+                    state.quit_msg.send_quit().await;
+                }
+                if key.code == Char('z') {
+                    low_level::emulate_default_handler(SIGSTOP).unwrap();
+                }
             }
         }
         // Unknown event, ignore
