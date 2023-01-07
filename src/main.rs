@@ -8,6 +8,7 @@ mod record;
 mod bigdurations;
 mod display_volume;
 mod printrn;
+mod quitmsg;
 
 extern crate chrono;
 
@@ -21,7 +22,7 @@ use chrono::{DateTime, Local};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
-use std::time::{Duration};
+use std::time::Duration;
 use async_stream::stream;
 use clap::{Arg, Command, Parser, Subcommand, ValueEnum};
 use futures_core::Stream;
@@ -45,6 +46,7 @@ use crossterm::event::KeyCode::Char;
 use crossterm::event::ModifierKeyCode::{LeftControl, RightControl};
 use tokio::sync::broadcast::error::RecvError;
 use signal_hook::low_level;
+use quitmsg::QuitMsg;
 
 type Chunk = Vec<f32>;
 
@@ -122,6 +124,11 @@ struct TermSize {
     y: u16
 }
 
+struct SigIntCmd {
+    keys: KeyCode,
+    modifier: KeyModifiers
+}
+
 impl TermSize {
     fn query() -> Self {
         match crossterm::terminal::size() {
@@ -150,33 +157,6 @@ impl TermSize {
     fn as_tuple(&self) -> (u16, u16) {
         (self.x, self.y)
     }
-}
-
-pub struct QuitMsg {
-    flag: RwLock<bool>
-}
-
-impl QuitMsg {
-    fn new() -> Self {
-        Self {
-            flag: RwLock::new(true)
-        }
-    }
-
-    async fn poll(&self) -> bool {
-        !self.flag.read().await.clone()
-    }
-
-    async fn wait(&self) {
-        while *self.flag.read().await {
-            tokio::time::sleep(Duration::from_millis(10)).await;
-        }
-    }
-
-    async fn send_quit(&self) {
-        *self.flag.write().await = false;
-    }
-
 }
 
 pub struct ProgramState {
