@@ -43,8 +43,6 @@ use std::io::{stdout, Write};
 use crossterm::event::Event::Key;
 use crossterm::event::KeyCode::Char;
 use crossterm::event::ModifierKeyCode::{LeftControl, RightControl};
-use libc::SIGSTOP;
-//use libc::wait;
 use tokio::sync::broadcast::error::RecvError;
 use signal_hook::low_level;
 
@@ -313,7 +311,11 @@ async fn handle_signals(state: Arc<ProgramState>) -> Result<(), Box<dyn Error>> 
                     state.quit_msg.send_quit().await;
                 }
                 if key.code == Char('z') {
-                    low_level::emulate_default_handler(SIGSTOP).unwrap();
+                    // I would like compatibility, but not enough to bother
+                    // trying to get Ctrl+Z to work on Windows >.>
+                    // Just use WSL and leave me alone, you cucks.
+                    #[cfg(target_family = "unix")]
+                    low_level::emulate_default_handler(libc::SIGSTOP).unwrap();
                 }
             }
         }
