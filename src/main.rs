@@ -67,6 +67,8 @@ impl Default for FormatSelect {
 struct Cli {
     #[command(subcommand)]
     cmd: Commands,
+    #[arg(short, long)]
+    interactive: bool
 }
 
 #[derive(Subcommand, Debug, Clone, EnumAsInner)]
@@ -124,10 +126,11 @@ struct TermSize {
     y: u16
 }
 
-struct SigIntCmd {
-    keys: KeyCode,
-    modifier: KeyModifiers
-}
+// #[derive(clap::Args, Debug, Clone)]
+// struct SigIntCmd {
+//     key: KeyCode,
+//     modifier: KeyModifiers
+// }
 
 impl TermSize {
     fn query() -> Self {
@@ -168,11 +171,13 @@ pub struct ProgramState {
     display: RwLock<bool>,
     #[cfg(target_family = "unix")]
     signals: RwLock<Signals>,
+    interactive: RwLock<bool>
 }
 
 impl ProgramState {
     fn new(cli: Cli) -> Self {
         let display = match cli.cmd.as_rec() { Some(r) => r.display, None => false };
+        let interactive = cli.interactive;
         Self {
             cli: RwLock::new(cli),
             time_of_start: RwLock::new(Instant::now()),
@@ -181,7 +186,8 @@ impl ProgramState {
             cpal_host: RwLock::new(cpal::default_host()),
             term_size: RwLock::new(TermSize::query()),
             quit_msg: QuitMsg::new(),
-            display: RwLock::new(display)
+            display: RwLock::new(display),
+            interactive: RwLock::new(interactive)
         }
     }
 }
@@ -298,6 +304,11 @@ async fn handle_signals(state: Arc<ProgramState>) -> Result<(), Box<dyn Error>> 
                     low_level::emulate_default_handler(libc::SIGSTOP).unwrap();
                 }
             }
+
+            if key.code == Char('I') {
+                *state.interactive.write().await = false;
+                update_raw_mode(state.clone()).await?;
+            }
         }
         // Unknown event, ignore
         _ => {}
@@ -313,16 +324,34 @@ async fn signal_thread(state: Arc<ProgramState>) {
             }
             Ok(_) => {}
         };
+        if !*state.interactive.read().await {
+            break;
+        }
     }
+}
+
+
+async fn update_raw_mode(state: Arc<ProgramState>) -> Result<(), Box<dyn Error>> {
+    match *state.interactive.read().await {
+        true => {
+            enable_raw_mode()?;
+        }
+        false => {
+            disable_raw_mode()?;
+        }
+    }
+    Ok(())
 }
 
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let args = Cli::parse();
-    enable_raw_mode()?;
 
     let state = Arc::new(ProgramState::new(args));
+
+    let state_ptr_raw_mode = state.clone();
+    update_raw_mode(state_ptr_raw_mode.clone()).await?;
 
     match display_probe_info_if_requested(&state).await {
         Ok(quit_flag) => if quit_flag {
@@ -349,6 +378,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let local = tokio::task::LocalSet::new();
 
+
     // task is set inside a LocalSet to allow us to catch any bad API panicking
     // ( C FFI libraries, I'm looking at you ;) )
     // without making it impossible to use .await (as seems to be the case with catch_unwind)
@@ -367,7 +397,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
     }).await;
 
-    disable_raw_mode()?;
+
+    update_raw_mode(state_ptr_raw_mode.clone()).await?;
 
     Ok(())
 }
