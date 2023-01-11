@@ -10,8 +10,7 @@ use futures_util::StreamExt;
 use hound::{WavSpec, WavWriter};
 use tokio::sync::RwLock;
 use vorbis_rs::VorbisEncoder;
-
-use crate::printrn;
+use printrn::printrn;
 
 use crate::Chunk;
 

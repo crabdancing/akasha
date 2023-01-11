@@ -7,7 +7,6 @@ mod microphone;
 mod record;
 mod bigdurations;
 mod display_volume;
-mod printrn;
 mod quitmsg;
 
 extern crate chrono;
@@ -47,6 +46,7 @@ use crossterm::event::ModifierKeyCode::{LeftControl, RightControl};
 use tokio::sync::broadcast::error::RecvError;
 use signal_hook::low_level;
 use quitmsg::QuitMsg;
+use printrn::printrn;
 
 type Chunk = Vec<f32>;
 

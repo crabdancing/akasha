@@ -11,7 +11,7 @@ use crate::{Chunk, ProgramState};
 use wide::*;
 use tokio::sync::Mutex;
 use tokio::time::Instant;
-use crate::printrn;
+use printrn::printrn;
 
 // When I try to make these generic I get:
 // "type parameter `F` must be covered by another type when it appears before the first local type (`Db<F>`)"

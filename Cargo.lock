@@ -29,6 +29,7 @@ dependencies = [
  "futures-util",
  "hound",
  "libc",
+ "printrn",
  "signal-hook",
  "tokio",
  "vorbis_rs",
@@ -991,6 +992,12 @@ name = "pkg-config"
 version = "0.3.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6ac9a59f73473f1b8d852421e59e64809f025994837ef743615c6d0c5b305160"
+
+[[package]]
+name = "printrn"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b533718a21e69a925f9d6596d94e3c4bafa5967545cae421f109ea97bde8f6b8"
 
 [[package]]
 name = "proc-macro-crate"
