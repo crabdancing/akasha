@@ -3,8 +3,8 @@ use std::fmt::{Display, Formatter};
 use std::iter::Sum;
 use std::ops::{Add, Div};
 use std::sync::Arc;
-use async_stream::stream;
 use std::time::{Duration};
+use async_fn_stream::fn_stream;
 use futures_core::stream::Stream;
 use futures_util::StreamExt;
 use crate::{Chunk, ProgramState};
@@ -122,13 +122,12 @@ impl VolumeStreamBuilder {
         }
     }
 
-    pub async fn getstream_display_volume<S: Stream<Item = Chunk>>(&self, mic_audio_stream: S, state: Arc<ProgramState>) -> impl Stream<Item = Chunk> {
+    pub async fn getstream_display_volume<S: Stream<Item = Chunk> + Unpin>(&self, mut mic_audio_stream: S, state: Arc<ProgramState>) -> impl Stream<Item = Chunk> {
         let builder = self.clone();
-
-
-        stream! {
+        fn_stream(|emitter| async move {
             let mut chunk_num: u128 = u128::default();
-            for await chunk in mic_audio_stream {
+           // for await chunk in mic_audio_stream {
+            while let Some(chunk) = mic_audio_stream.next().await {
                 if *state.display.read().await {
                     if builder.dur_of_display.is_some()
                             && builder.time_of_start.elapsed() >= builder.dur_of_display.unwrap()  {
@@ -136,7 +135,7 @@ impl VolumeStreamBuilder {
                         printrn!("Display of microphone stream is disabled.");
                     }
 
-                    if ( builder.every_n == 0 || (chunk_num % builder.every_n == 0) )  {
+                    if builder.every_n == 0 || (chunk_num % builder.every_n == 0)  {
                         let db: Db = get_average_volume(&chunk);
                         let db_string = db.to_string();
                         let p: NormRatio = db.into();
@@ -146,8 +145,8 @@ impl VolumeStreamBuilder {
                 }
 
                 chunk_num = chunk_num.saturating_add(1);
-                yield chunk;
+                emitter.emit(chunk).await;
             }
-        }
+        })
     }
 }

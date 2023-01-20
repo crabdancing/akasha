@@ -4,7 +4,6 @@ use std::num::{NonZeroU32, NonZeroU8};
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-use async_stream::stream;
 use futures_core::Stream;
 use futures_util::StreamExt;
 use hound::{WavSpec, WavWriter};

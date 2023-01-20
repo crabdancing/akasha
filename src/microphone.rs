@@ -1,9 +1,9 @@
-use async_stream::stream;
 use futures_core::Stream;
 use crate::{Chunk, ProgramState};
 use cpal::traits::DeviceTrait;
 use cpal::traits::StreamTrait;
 use std::sync::{Arc, mpsc};
+use async_fn_stream::{fn_stream, try_fn_stream};
 use tokio::sync::RwLock;
 
 use crate::printrn;
@@ -14,9 +14,9 @@ pub fn getstream_mic_input(
     config: cpal::StreamConfig,
     input_device: cpal::Device,
     state: Arc<ProgramState>) -> impl Stream<Item = Chunk> {
-
-    stream! {
+    fn_stream(|emitter| async move {
         let state = state.clone();
+        // TODO: remove MPSC channel once async-fn-stream supports working across runtimes.
         let (tx, rx) = mpsc::channel::<Chunk>();
 
         let input_stream = cpal::Device::build_input_stream(
@@ -27,12 +27,12 @@ pub fn getstream_mic_input(
         input_stream.play().expect("Failed to play stream");
 
         for data in rx {
-            yield data;
+            emitter.emit(data).await;
             if state.quit_msg.poll().await {
                 break;
             }
         }
         printrn!("Stream ended!");
 
-    }
+    })
 }

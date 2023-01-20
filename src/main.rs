@@ -22,7 +22,6 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::time::Duration;
-use async_stream::stream;
 use clap::{Arg, Command, Parser, Subcommand, ValueEnum};
 use futures_core::Stream;
 use futures_util::pin_mut;
@@ -40,6 +39,7 @@ use crate::FormatSelect::Ogg;
 use enum_as_inner::EnumAsInner;
 use tokio::runtime::Runtime;
 use std::io::{stdout, Write};
+use async_fn_stream::fn_stream;
 use crossterm::event::Event::Key;
 use crossterm::event::KeyCode::Char;
 use crossterm::event::ModifierKeyCode::{LeftControl, RightControl};
@@ -205,16 +205,15 @@ async fn get_device_list(state: &ProgramState) -> Result<Vec<String>, Box<dyn er
 
 
 fn streamgen_gen_file_path<A>(args: A) -> impl Stream<Item = PathBuf> where A: Deref<Target = Cli> {
-    stream! {
+    fn_stream(|emitter| async move {
         let now: DateTime<Local> = Local::now();
         let timestamp_string =
             now.format(args.cmd.as_rec().unwrap().time_format.as_str());
-        // TODO: path logic for make path of each segment
         let mut recording_path = args.cmd.as_rec().unwrap().path_dir.clone();
         let basename = format!("{}__{}", args.cmd.as_rec().unwrap().name_prefix, timestamp_string.to_string());
         recording_path.push(basename);
-        yield recording_path;
-    }
+        emitter.emit(recording_path).await;
+    })
 }
 
 async fn display_probe_info_if_requested(state: &ProgramState) -> Result<bool, Box<dyn Error>> {

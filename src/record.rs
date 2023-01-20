@@ -3,7 +3,6 @@ use std::fmt::Debug;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use async_stream::stream;
 use cpal::traits::{DeviceTrait, HostTrait};
 use futures_core::Stream;
 use futures_util::{FutureExt, pin_mut, StreamExt};
