@@ -117,12 +117,6 @@ struct TermSize {
     y: u16
 }
 
-// #[derive(clap::Args, Debug, Clone)]
-// struct SigIntCmd {
-//     key: KeyCode,
-//     modifier: KeyModifiers
-// }
-
 impl TermSize {
     fn query() -> Self {
         match crossterm::terminal::size() {
@@ -183,7 +177,7 @@ impl ProgramState {
     }
 }
 
-async fn get_device_list(state: &ProgramState) -> Result<Vec<String>, Box<dyn error::Error>> {
+async fn get_device_list(state: &ProgramState) -> Result<Vec<String>, Box<dyn Error>> {
     let mut out = Vec::new();
     for device in state.cpal_host.read().await.input_devices()? {
         match device.name() {
@@ -230,7 +224,7 @@ async fn skippable_sleep(dur: Duration, state: Arc<ProgramState>) {
         _ = state.quit_msg.wait() => {
             printrn!("Sleep skipped by quit!");
         }
-    };
+    }
 }
 
 async fn wait_between_errors(state: Arc<ProgramState>, err: Box<dyn Error>) {
