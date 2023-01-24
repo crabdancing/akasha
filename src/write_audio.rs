@@ -7,7 +7,6 @@ use std::time::{Duration, Instant};
 use futures_core::Stream;
 use futures_util::StreamExt;
 use hound::{WavSpec, WavWriter};
-use tokio::sync::RwLock;
 use vorbis_rs::VorbisEncoder;
 use printrn::printrn;
 

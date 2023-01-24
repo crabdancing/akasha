@@ -1,14 +1,12 @@
 use std::error::Error;
-use std::fmt::Debug;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::{Duration};
 use cpal::traits::{DeviceTrait, HostTrait};
 use futures_core::Stream;
-use futures_util::{FutureExt, pin_mut, StreamExt};
-use crate::{Cli, FormatSelect, microphone, printrn, ProgramState, write_audio};
+use futures_util::{pin_mut, StreamExt};
+use crate::{FormatSelect, microphone, printrn, ProgramState, write_audio};
 use crate::display_volume;
-use crate::display_volume::VolumeStreamBuilder;
 
 pub async fn record_segments<S: Stream<Item = PathBuf> + Unpin>(
     mut paths: S,

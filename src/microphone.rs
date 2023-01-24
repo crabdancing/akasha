@@ -3,8 +3,7 @@ use crate::{Chunk, ProgramState};
 use cpal::traits::DeviceTrait;
 use cpal::traits::StreamTrait;
 use std::sync::{Arc, mpsc};
-use async_fn_stream::{fn_stream, try_fn_stream};
-use tokio::sync::RwLock;
+use async_fn_stream::{fn_stream};
 
 use crate::printrn;
 

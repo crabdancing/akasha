@@ -1,7 +1,5 @@
-use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::iter::Sum;
-use std::ops::{Add, Div};
 use std::sync::Arc;
 use std::time::{Duration};
 use async_fn_stream::fn_stream;
@@ -9,7 +7,6 @@ use futures_core::stream::Stream;
 use futures_util::StreamExt;
 use crate::{Chunk, ProgramState};
 use wide::*;
-use tokio::sync::Mutex;
 use tokio::time::Instant;
 use printrn::printrn;
 
