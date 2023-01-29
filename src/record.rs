@@ -27,8 +27,8 @@ pub async fn record_segments<S: Stream<Item = PathBuf> + Unpin>(
 
         printrn!("Current sample rate: {}", config.sample_rate.0);
 
-        let mic_input_stream  = microphone::getstream_mic_input(config.clone(), input_device, state.clone());
-        pin_mut!(mic_input_stream);
+        let stream = microphone::getstream_mic_input(config.clone(), input_device, state.clone());
+        pin_mut!(stream);
 
         let mut volume_stream_builder_inst = display_volume::VolumeStreamBuilder::new();
         volume_stream_builder_inst.dur_of_display = match state.cli.read().await.cmd.as_rec().unwrap().display_dur {
@@ -36,9 +36,9 @@ pub async fn record_segments<S: Stream<Item = PathBuf> + Unpin>(
             None => None
         };
         volume_stream_builder_inst.time_of_start = *state.time_of_start.read().await;
-        let displayed_volume_stream = volume_stream_builder_inst.getstream_display_volume(
-            mic_input_stream, state.clone()).await;
-        pin_mut!(displayed_volume_stream);
+        let stream = volume_stream_builder_inst.getstream_display_volume(
+            stream, state.clone()).await;
+        pin_mut!(stream);
 
         let dur = state.cli.read().await.cmd.as_rec().unwrap().segment_dur;
         let segment_dur = Duration::from(&dur);
@@ -46,7 +46,7 @@ pub async fn record_segments<S: Stream<Item = PathBuf> + Unpin>(
             FormatSelect::Wav => {
                 write_audio::write_to_wav(
                     &path,
-                    displayed_volume_stream,
+                    stream,
                     &config,
                     &segment_dur
                 ).await?;
@@ -54,7 +54,7 @@ pub async fn record_segments<S: Stream<Item = PathBuf> + Unpin>(
             FormatSelect::Ogg => {
                 write_audio::write_to_ogg(
                     &path,
-                    displayed_volume_stream,
+                    stream,
                     &config,
                     &segment_dur).await?;
             }
