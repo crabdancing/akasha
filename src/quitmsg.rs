@@ -23,6 +23,7 @@ impl QuitMsg {
     }
 }
 
+#[derive(Debug)]
 pub struct QuitMsg {
     flag: RwLock<bool>
 }

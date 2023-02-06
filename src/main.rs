@@ -13,6 +13,7 @@ extern crate chrono;
 
 use std::{error, thread};
 use std::error::Error;
+use std::fmt::{Debug, Formatter};
 use std::ops::Deref;
 use chrono::{DateTime, Local};
 use std::path::PathBuf;
@@ -34,7 +35,9 @@ use crate::FormatSelect::Ogg;
 use enum_as_inner::EnumAsInner;
 use tokio::runtime::Runtime;
 use async_fn_stream::fn_stream;
+use cpal::Host;
 use crossterm::event::KeyCode::Char;
+use log::{debug, info, trace, warn};
 use signal_hook::low_level;
 use quitmsg::QuitMsg;
 use printrn::printrn;
@@ -106,12 +109,12 @@ enum ProbeOpts {
 }
 
 #[cfg(target_family = "unix")]
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct Signals {
     sighup: Arc<AtomicBool>
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct TermSize {
     x: u16,
     y: u16
@@ -158,6 +161,15 @@ pub struct ProgramState {
     signals: RwLock<Signals>,
     interactive: RwLock<bool>
 }
+
+// impl Debug for ProgramState {
+//     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+//         writeln!(f, "Display?: {:?},\n
+// Interactive?: {:?}\n
+// Terminal size?: {:?}\n
+//  ", self.display, self.interactive, self.term_size)
+//     }
+// }
 
 impl ProgramState {
     fn new(cli: Cli) -> Self {
@@ -229,13 +241,11 @@ async fn skippable_sleep(dur: Duration, state: Arc<ProgramState>) {
 
 async fn wait_between_errors(state: Arc<ProgramState>, err: Box<dyn Error>) {
     let wait_time = 30;
-    printrn!("Warning! Recording segment failed with error: {}", err);
-    printrn!("Will attempt again in {} secs...", wait_time);
+    warn!("Warning! Recording segment failed with error: {}\nWill attempt again in {} secs...", err, wait_time);
     skippable_sleep(Duration::from_secs(wait_time), state.clone()).await;
 }
 
 async fn main_task(state: Arc<ProgramState>) {
-
     let args = state.cli.read().await;
     if !args.cmd.as_rec().unwrap().path_dir.exists() {
         std::fs::create_dir_all(&args.cmd.as_rec().unwrap().path_dir).expect("Failed to create path");
@@ -330,10 +340,12 @@ async fn update_raw_mode(state: Arc<ProgramState>) -> Result<(), Box<dyn Error>>
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
+    env_logger::init();
+
     let args = Cli::parse();
-
+    debug!("Args: {:#?}", &args);
     let state = Arc::new(ProgramState::new(args));
-
+    //debug!("Starting state: {:#?}", &state);
     let state_ptr_raw_mode = state.clone();
     update_raw_mode(state_ptr_raw_mode.clone()).await?;
 
@@ -347,9 +359,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     #[cfg(target_family = "unix")]
     match signal_hook::flag::register(libc::SIGHUP, (&state.signals.write().await.sighup).clone()) {
-        Ok(_) => {},
+        Ok(_) => {
+            info!("Registered Linux signal hook successfully.")
+        },
         Err(_) => {
-            printrn!("Warning: couldn't register signal: SIGHUP");
+            warn!("Warning: couldn't register signal: SIGHUP");
         }
     }
 
