@@ -84,7 +84,7 @@ struct Rec {
     format: FormatSelect,
     #[arg(short, long)]
     // #[clap(conflicts_with="list_devices")]
-    #[clap(value_hint = clap::ValueHint::DirPath,)]
+    #[clap(value_hint = clap::ValueHint::DirPath)]
     path_dir: PathBuf,
     #[arg(short, long, default_value = "akasha")]
     name_prefix: String,
