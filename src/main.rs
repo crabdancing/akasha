@@ -201,13 +201,13 @@ async fn get_device_list(state: &ProgramState) -> Result<Vec<String>, Box<dyn Er
 }
 
 
-fn streamgen_gen_file_path<A>(args: A) -> impl Stream<Item = PathBuf> where A: Deref<Target = Cli> {
+fn streamgen_gen_file_path(rec: Rec) -> impl Stream<Item = PathBuf> {
     fn_stream(|emitter| async move {
         let now: DateTime<Local> = Local::now();
         let timestamp_string =
-            now.format(args.cmd.as_rec().unwrap().time_format.as_str());
-        let mut recording_path = args.cmd.as_rec().unwrap().path_dir.clone();
-        let basename = format!("{}__{}", args.cmd.as_rec().unwrap().name_prefix, timestamp_string.to_string());
+            now.format(rec.time_format.as_str());
+        let mut recording_path = rec.path_dir.clone();
+        let basename = format!("{}__{}", rec.name_prefix, timestamp_string.to_string());
         recording_path.push(basename);
         emitter.emit(recording_path).await;
     })
@@ -247,21 +247,23 @@ async fn wait_between_errors(state: Arc<ProgramState>, err: Box<dyn Error>) {
 
 async fn main_task(state: Arc<ProgramState>) {
     let args = state.cli.read().await;
-    if !args.cmd.as_rec().unwrap().path_dir.exists() {
-        std::fs::create_dir_all(&args.cmd.as_rec().unwrap().path_dir).expect("Failed to create path");
-    }
+    if let Some(rec) = args.cmd.as_rec() {
+        if rec.path_dir.exists() {
+            std::fs::create_dir_all(&rec.path_dir).expect("Failed to create path");
+        }
 
-    let new_file_name_stream =
-        streamgen_gen_file_path(args);
-    pin_mut!(new_file_name_stream);
+        let new_file_name_stream =
+            streamgen_gen_file_path(rec.clone());
+        pin_mut!(new_file_name_stream);
 
-    let result = record::record_segments(
-        new_file_name_stream,
-        state.clone()
-    ).await;
+        let result = record::record_segments(
+            new_file_name_stream,
+            state.clone()
+        ).await;
 
-    if let Err(e) = result {
-        wait_between_errors(state.clone(), e.into()).await;
+        if let Err(e) = result {
+            wait_between_errors(state.clone(), e.into()).await;
+        }
     }
 }
 
