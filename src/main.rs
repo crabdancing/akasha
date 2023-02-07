@@ -234,14 +234,14 @@ async fn skippable_sleep(dur: Duration, state: Arc<ProgramState>) {
     tokio::select! {
         _ = tokio::time::sleep(dur) => {}
         _ = state.quit_msg.wait() => {
-            printrn!("Sleep skipped by quit!");
+            debug!("Sleep skipped by quit!");
         }
     }
 }
 
 async fn wait_between_errors(state: Arc<ProgramState>, err: Box<dyn Error>) {
     let wait_time = 30;
-    warn!("Warning! Recording segment failed with error: {}\nWill attempt again in {} secs...", err, wait_time);
+    warn!("Recording segment failed with error: {}\nWill attempt again in {} secs...", err, wait_time);
     skippable_sleep(Duration::from_secs(wait_time), state.clone()).await;
 }
 
@@ -285,7 +285,7 @@ async fn handle_signals(state: Arc<ProgramState>) -> Result<(), Box<dyn Error>> 
                 let mut state_cur = *state.display.read().await;
                 state_cur = !state_cur;
                 *state.display.write().await = state_cur;
-                printrn!("Display state toggled to: {}", state_cur);
+                info!("Display state toggled to: {}", state_cur);
 
             }
             if key.modifiers == KeyModifiers::CONTROL {
@@ -316,7 +316,7 @@ async fn signal_thread(state: Arc<ProgramState>) {
     loop {
         match handle_signals(state.clone()).await {
             Err(_) => {
-                printrn!("Warning! Error in signal handler function");
+                warn!("Error in signal handler function");
             }
             Ok(_) => {}
         };
