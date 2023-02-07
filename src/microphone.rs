@@ -4,6 +4,7 @@ use cpal::traits::DeviceTrait;
 use cpal::traits::StreamTrait;
 use std::sync::{Arc, mpsc};
 use async_fn_stream::{fn_stream};
+use log::debug;
 
 use crate::printrn;
 
@@ -31,7 +32,6 @@ pub fn getstream_mic_input(
                 break;
             }
         }
-        printrn!("Stream ended!");
-
+        debug!("Stream ended!");
     })
 }

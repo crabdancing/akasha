@@ -5,6 +5,7 @@ use std::time::{Duration};
 use cpal::traits::{DeviceTrait, HostTrait};
 use futures_core::Stream;
 use futures_util::{pin_mut, StreamExt};
+use log::{debug, info};
 use crate::{FormatSelect, microphone, printrn, ProgramState, write_audio};
 use crate::display_volume;
 
@@ -14,7 +15,7 @@ pub async fn record_segments<S: Stream<Item = PathBuf> + Unpin>(
 
 ) -> Result<S, Box<dyn Error>> {
     while let Some(path) = paths.next().await {
-        printrn!("Begin recording segment...");
+        info!("Begin recording segment...");
         let host = cpal::default_host();
         let input_device = host.default_input_device()
             .ok_or("No default input device available :c")?;
@@ -25,7 +26,7 @@ pub async fn record_segments<S: Stream<Item = PathBuf> + Unpin>(
         let mut config: cpal::StreamConfig = supported_config.into();
         config.sample_rate = cpal::SampleRate(44_100);
 
-        printrn!("Current sample rate: {}", config.sample_rate.0);
+        info!("Current sample rate: {}", config.sample_rate.0);
 
         let stream = microphone::getstream_mic_input(config.clone(), input_device, state.clone());
         pin_mut!(stream);

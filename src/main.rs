@@ -342,7 +342,7 @@ async fn update_raw_mode(state: Arc<ProgramState>) -> Result<(), Box<dyn Error>>
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    env_logger::init();
+    env_logger::init_from_env(env_logger::Env::default().filter_or(env_logger::DEFAULT_FILTER_ENV, "info"));
 
     let args = Cli::parse();
     debug!("Args: {:#?}", &args);
