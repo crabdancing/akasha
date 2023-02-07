@@ -5,6 +5,7 @@ use std::time::{Duration};
 use async_fn_stream::fn_stream;
 use futures_core::stream::Stream;
 use futures_util::StreamExt;
+use log::info;
 use crate::{Chunk, ProgramState};
 use wide::*;
 use tokio::time::Instant;
@@ -129,7 +130,7 @@ impl VolumeStreamBuilder {
                     if builder.dur_of_display.is_some()
                             && builder.time_of_start.elapsed() >= builder.dur_of_display.unwrap()  {
                         //*state.display.write().await = false;
-                        printrn!("Display of microphone stream is disabled.");
+                        info!("Display of microphone stream is disabled.");
                     }
 
                     if builder.every_n == 0 || (chunk_num % builder.every_n == 0)  {

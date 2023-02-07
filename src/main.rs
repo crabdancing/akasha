@@ -23,7 +23,7 @@ use std::time::Duration;
 use clap::{Parser, Subcommand, ValueEnum};
 use futures_core::Stream;
 use futures_util::pin_mut;
-use tokio::sync::RwLock;
+use tokio::sync::{RwLock, RwLockReadGuard};
 use tokio::time::Instant;
 use clap_duration::{duration_range_value_parse};
 use cpal::traits::{DeviceTrait, HostTrait};
@@ -187,6 +187,18 @@ impl ProgramState {
             interactive: RwLock::new(interactive)
         }
     }
+
+    async fn update_raw_mode(&self) -> Result<(), Box<dyn Error>> {
+        match *self.interactive.read().await {
+            true => {
+                enable_raw_mode()?;
+            }
+            false => {
+                disable_raw_mode()?;
+            }
+        }
+        Ok(())
+    }
 }
 
 async fn get_device_list(state: &ProgramState) -> Result<Vec<String>, Box<dyn Error>> {
@@ -302,8 +314,7 @@ async fn handle_signals(state: Arc<ProgramState>) -> Result<(), Box<dyn Error>> 
             }
 
             if key.code == Char('I') {
-                *state.interactive.write().await = false;
-                update_raw_mode(state.clone()).await?;
+                state.update_raw_mode();
             }
         }
         // Unknown event, ignore
@@ -327,14 +338,15 @@ async fn signal_thread(state: Arc<ProgramState>) {
 }
 
 
-async fn update_raw_mode(state: Arc<ProgramState>) -> Result<(), Box<dyn Error>> {
-    match *state.interactive.read().await {
+async fn update_raw_mode<'a>(state: RwLockReadGuard<'a, bool>) -> Result<(), Box<dyn Error>> {
+    match *state {
         true => {
             enable_raw_mode()?;
         }
         false => {
             disable_raw_mode()?;
         }
+        _ => {}
     }
     Ok(())
 }
@@ -343,20 +355,21 @@ async fn update_raw_mode(state: Arc<ProgramState>) -> Result<(), Box<dyn Error>>
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     env_logger::init_from_env(env_logger::Env::default().filter_or(env_logger::DEFAULT_FILTER_ENV, "info"));
+    trace!("Begin main()");
 
     let args = Cli::parse();
     debug!("Args: {:#?}", &args);
     let state = Arc::new(ProgramState::new(args));
     //debug!("Starting state: {:#?}", &state);
-    let state_ptr_raw_mode = state.clone();
-    update_raw_mode(state_ptr_raw_mode.clone()).await?;
-
+    let state_ptr = state.clone();
+    state_ptr.update_raw_mode();
     match display_probe_info_if_requested(&state).await {
         Ok(quit_flag) => if quit_flag {
             disable_raw_mode()?;
             return Ok(()); // goodbye :3
         }
-        _ => {},
+        _ => {
+        },
     }
 
     #[cfg(target_family = "unix")]
@@ -382,23 +395,25 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // task is set inside a LocalSet to allow us to catch any bad API panicking
     // ( C FFI libraries, I'm looking at you ;) )
     // without making it impossible to use .await (as seems to be the case with catch_unwind)
+    let state_ptr = state.clone();
     local.run_until(async move {
-        while !state.quit_msg.poll().await {
-            let state_ptr1 = state.clone();
+        let state_ptr = state_ptr.clone();
+        while !state_ptr.quit_msg.poll().await {
+            let state_ptr_main_task = state_ptr.clone();
             let task_result = tokio::task::spawn_local(async move {
-                main_task(state_ptr1).await;
+                main_task(state_ptr_main_task).await;
             }).await;
 
-            let state_ptr2 = state.clone();
             match task_result {
                 Ok(_) => {}
-                Err(e) => wait_between_errors(state_ptr2, e.into()).await
+                Err(e) => wait_between_errors(state_ptr.clone(), e.into()).await
             }
         }
     }).await;
 
 
-    update_raw_mode(state_ptr_raw_mode.clone()).await?;
+    let state_ptr = state.clone();
+    state_ptr.update_raw_mode().await.expect("Error updating raw mode.");
 
     Ok(())
 }
