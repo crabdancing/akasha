@@ -5,10 +5,25 @@ use std::time::{Duration};
 use cpal::traits::{DeviceTrait, HostTrait};
 use futures_core::Stream;
 use futures_util::{pin_mut, StreamExt};
+use libc::input_absinfo;
 use log::{debug, info};
-use crate::{FormatSelect, microphone, printrn, ProgramState, write_audio};
+use crate::{FormatSelect, get_device_list, microphone, printrn, ProgramState, write_audio};
 use crate::display_volume;
 
+
+pub async fn search_for(state: Arc<ProgramState>, dev_name: &String) -> Result<cpal::Device, ()>{
+    for device in state.cpal_host.read().await.input_devices().expect("Failed to get input device info") {
+        match device.name() {
+            Ok(name) => {
+                if name.eq(dev_name) {
+                    return Ok(device);
+                }
+            },
+            Err(_) => return Err(())
+        };
+    }
+    Err(())
+}
 pub async fn record_segments<S: Stream<Item = PathBuf> + Unpin>(
     mut paths: S,
     state: Arc<ProgramState>
@@ -17,8 +32,17 @@ pub async fn record_segments<S: Stream<Item = PathBuf> + Unpin>(
     while let Some(path) = paths.next().await {
         info!("Begin recording segment...");
         let host = cpal::default_host();
-        let input_device = host.default_input_device()
-            .ok_or("No default input device available :c")?;
+        let input_device = match &state.cli.read().await.cmd.as_rec().unwrap().device {
+            Some(dev_name) => {
+                if let Ok(device) = search_for(state.clone(), dev_name).await {
+                    device
+                } else {
+                    panic!("Could not find device: {}", dev_name);
+                }
+            }
+            None => host.default_input_device()
+                .ok_or("No default input device available :c")?,
+        };
         let mut supported_configs_range = input_device.supported_input_configs()?;
         let supported_config = supported_configs_range.next()
             .ok_or("Could not get the first supported config from range")?
