@@ -49,6 +49,8 @@ pub async fn write_to_ogg<S: Stream<Item = Chunk> + Unpin>(
     let mut vorbis_encoder = start_vorbis_encoder.unwrap();
     let time_at_start = Instant::now();
     while let Some(chunk) = mic_input_stream.next().await {
+        // I hope this flushes each block!??
+        // The API doesn't give us a function to force to make sure
         vorbis_encoder.encode_audio_block(&[chunk.as_slice()])?;
         if time_at_start.elapsed() >= *segment_dur {
             break;
