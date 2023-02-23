@@ -88,8 +88,10 @@ struct Rec {
     path_dir: PathBuf,
     #[arg(short, long, default_value = "akasha")]
     name_prefix: String,
+    #[arg(short, long)]
+    device: Option<String>,
     //#[structopt(long = 0f32)]
-    #[arg(short, long, default_value="60s",
+    #[arg(short, long, default_value="30min",
     value_parser = duration_range_value_parse!(min: 1s, max: 1h))]
     segment_dur: DurationHuman,
     #[arg(short, long, default_value = "%Y-%m-%d__%H_%M_%S__%a_%b__%z")]

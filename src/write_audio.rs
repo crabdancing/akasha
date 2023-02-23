@@ -83,6 +83,7 @@ pub async fn write_to_wav<S: Stream<Item = Vec<f32>> + Unpin>(
         if time_at_start.elapsed() >= *segment_dur  {
             break;
         }
+        wav_writer.flush()?; // Flush after each chunk, so we don't lose a single chunk
     }
     wav_writer.finalize()?;
     Ok(mic_input_stream)
