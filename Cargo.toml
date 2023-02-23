@@ -1,6 +1,6 @@
 [package]
 name = "akasha"
-version = "1.2.2"
+version = "1.2.3"
 edition = "2021"
 authors = ["Alexandia P."]
 description = "Headless recording app, designed to run indefinitely and automatically break microphone stream into segments for ease of handling. Supports WAV and OGG format."
