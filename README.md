@@ -1,7 +1,12 @@
+
+[![Build status](https://github.com/alxpettit/akasha/workflows/CI/badge.svg)](https://github.com/alxpettit/akasha/actions?query=workflow%3ACI)
+[![crates.io](https://img.shields.io/crates/v/akasha.svg)](https://crates.io/crates/akasha)
+[![Documentation](https://docs.rs/akasha/badge.svg)](https://docs.rs/akasha)
+
 Akasha is a headless recording app, designed to split recordings into multiple segments to make them easier to manage.
 
 It's designed for low-resource consumption, making it useful as a background process for e.g. recording meetings,
-without having to keep OBS up.
+without having to keep OBS up, or write a jank shell utility involving `sox` or `ffmpeg`.
 
 It theoretically supports every major platform (though I haven't bothered to test it on non-Linux ones,
 I have tried to only use platform independent libraries).
@@ -9,10 +14,20 @@ I have tried to only use platform independent libraries).
 It supports autodetecting devices, manually specifying devices by name, and features a reasonably intuitive command line. To get started, most of the time, you can do:
 
 ```bash
-akasha rec --path-dir ~/Audio/
+akasha rec --path-dir ~/MyAudioDirectory/
 ```
 
 Where `--path-dir` is the directory it will write files into.
+
+If you do not specify `--path-dir`, e.g.:
+
+```bash
+akasha rec
+```
+
+...it will default to `~/Audio/akasha/`, where `~` is your home directory.
+
+Any directories that do not already exist, will be automatically created.
 
 If the default audio device it detects is incorrect, you can override it. First, get a list of all available input devices:
 
@@ -59,4 +74,4 @@ TODO:
 - [ ] Refactor error handling logic with snafu.
 - [ ] Nicer error messages
 - [ ] Eventually refactor out all the stream logic into audio-stream crate, maybe?
-- [ ] Default recording path to make more novice-friendly.
+- [x] Default recording path to make more novice-friendly.
