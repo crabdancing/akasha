@@ -5,7 +5,8 @@ edition = "2021"
 authors = ["Alexandia P."]
 description = "Headless recording app, designed to run indefinitely and automatically break microphone stream into segments for ease of handling. Supports WAV and OGG format."
 license = "AGPL-3.0-or-later"
-
+repository = "https://github.com/alxpettit/akasha"
+keywords = ["recording", "akashic", "audio", "sound", "PIM"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
