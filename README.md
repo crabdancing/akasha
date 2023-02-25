@@ -1,5 +1,6 @@
+# Akasha
 
-[![Build status](https://github.com/alxpettit/akasha/workflows/CI/badge.svg)](https://github.com/alxpettit/akasha/actions?query=workflow%3ACI)
+[![.github/workflows/rust.yml](https://github.com/alxpettit/akasha/actions/workflows/rust.yml/badge.svg)](https://github.com/alxpettit/akasha/actions/workflows/rust.yml)
 [![crates.io](https://img.shields.io/crates/v/akasha.svg)](https://crates.io/crates/akasha)
 
 Akasha is a headless recording app, designed to split recordings into multiple segments to make them easier to manage.
