@@ -75,5 +75,5 @@ TODO:
 - [ ] Nicer error messages
 - [ ] Eventually refactor out all the stream logic into audio-stream crate, maybe?
 - [x] Default recording path to make more novice-friendly.
-- [ ] Maybe fix raw mode not working with logging facilities (`/n` -> `/r/n`).
+- [ ] Maybe fix raw mode not working with logging facilities (`\n` -> `\r\n`).
 - [ ] Fix tracebacks not working with raw mode (https://werat.dev/blog/pretty-rust-backtraces-in-raw-terminal-mode/)
