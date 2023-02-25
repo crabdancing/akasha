@@ -11,7 +11,7 @@ without having to keep OBS up, or write a jank shell utility involving `sox` or 
 It theoretically supports every major platform (though I haven't bothered to test it on non-Linux ones,
 I have tried to only use platform independent libraries).
 
-It supports autodetecting devices, manually specifying devices by name, and features a reasonably intuitive command line. To get started, most of the time, you can do:
+It supports autodetecting input devices, manually specifying devices by name, and features a reasonably intuitive command line. To get started, most of the time, you can do:
 
 ```bash
 akasha rec --path-dir ~/MyAudioDirectory/
