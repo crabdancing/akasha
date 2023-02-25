@@ -40,7 +40,7 @@ use async_fn_stream::fn_stream;
 use cpal::Host;
 use crossterm::event::KeyCode::Char;
 use lazy_static::lazy_static;
-use log::{debug, info, trace, warn};
+use log::{debug, error, info, trace, warn};
 use signal_hook::low_level;
 use quitmsg::QuitMsg;
 use printrn::printrn;
@@ -385,7 +385,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let state = Arc::new(ProgramState::new(args));
     //debug!("Starting state: {:#?}", &state);
     let state_ptr = state.clone();
-    state_ptr.update_raw_mode();
+
+    match state_ptr.update_raw_mode().await {
+        Ok(_) => {
+            info!("Updated raw mode.");
+        }
+        Err(_) => {
+            error!("Failed to update raw mode");
+        }
+    }
+
     match display_probe_info_if_requested(&state).await {
         Ok(quit_flag) => if quit_flag {
             disable_raw_mode()?;
