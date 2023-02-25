@@ -12,17 +12,19 @@ mod quitmsg;
 extern crate chrono;
 
 use std::{error, thread};
+use std::borrow::ToOwned;
 use std::error::Error;
+use std::ffi::OsString;
 use std::fmt::{Debug, Formatter};
 use std::ops::Deref;
 use chrono::{DateTime, Local};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 use clap::{Parser, Subcommand, ValueEnum};
 use futures_core::Stream;
-use futures_util::pin_mut;
+use futures_util::{AsyncReadExt, pin_mut};
 use tokio::sync::{RwLock, RwLockReadGuard};
 use tokio::time::Instant;
 use clap_duration::{duration_range_value_parse};
@@ -37,10 +39,12 @@ use tokio::runtime::Runtime;
 use async_fn_stream::fn_stream;
 use cpal::Host;
 use crossterm::event::KeyCode::Char;
+use lazy_static::lazy_static;
 use log::{debug, info, trace, warn};
 use signal_hook::low_level;
 use quitmsg::QuitMsg;
 use printrn::printrn;
+use tokio::io::AsyncWriteExt;
 
 type Chunk = Vec<f32>;
 
@@ -77,15 +81,15 @@ struct Probe {
     // the underscore is necessary here because `type` is already a reserved identifier >.<
     type_: ProbeOpts
 }
-
 #[derive(clap::Args, Debug, Clone)]
 struct Rec {
-    #[arg(short, long, default_value = "ogg")]
+    #[arg(short, long, default_value = "ogg", help = "The format used to write the recording\n")]
     format: FormatSelect,
     #[arg(short, long)]
     // #[clap(conflicts_with="list_devices")]
     #[clap(value_hint = clap::ValueHint::DirPath)]
-    path_dir: PathBuf,
+    #[arg(help = "The directory in which we write our recording segment files\n")]
+    path_dir: Option<PathBuf>,
     #[arg(short, long, default_value = "akasha")]
     name_prefix: String,
     #[arg(short, long)]
@@ -97,7 +101,8 @@ struct Rec {
     #[arg(short, long, default_value = "%Y-%m-%d__%H_%M_%S__%a_%b__%z")]
     time_format: String,
     #[arg(
-    long, value_parser = duration_range_value_parse!(min: 1s, max: 1h)
+    long, value_parser = duration_range_value_parse!(min: 1s, max: 1h),
+    help = "The duration after which to terminate the real-time volume display"
     )]
     display_dur: Option<DurationHuman>,
     #[arg(long)]
@@ -161,7 +166,8 @@ pub struct ProgramState {
     display: RwLock<bool>,
     #[cfg(target_family = "unix")]
     signals: RwLock<Signals>,
-    interactive: RwLock<bool>
+    interactive: RwLock<bool>,
+    path_dir: RwLock<PathBuf>,
 }
 
 // impl Debug for ProgramState {
@@ -186,7 +192,8 @@ impl ProgramState {
             term_size: RwLock::new(TermSize::query()),
             quit_msg: QuitMsg::new(),
             display: RwLock::new(display),
-            interactive: RwLock::new(interactive)
+            interactive: RwLock::new(interactive),
+            path_dir: Default::default(),
         }
     }
 
@@ -215,12 +222,12 @@ async fn get_device_list(state: &ProgramState) -> Result<Vec<String>, Box<dyn Er
 }
 
 
-fn streamgen_gen_file_path(rec: Rec) -> impl Stream<Item = PathBuf> {
+fn streamgen_gen_file_path<'a>(rec: &'a Rec, path_dir: PathBuf) -> impl Stream<Item = PathBuf>  + 'a {
     fn_stream(|emitter| async move {
         let now: DateTime<Local> = Local::now();
         let timestamp_string =
             now.format(rec.time_format.as_str());
-        let mut recording_path = rec.path_dir.clone();
+        let mut recording_path = path_dir;
         let basename = format!("{}__{}", rec.name_prefix, timestamp_string.to_string());
         recording_path.push(basename);
         emitter.emit(recording_path).await;
@@ -262,12 +269,26 @@ async fn wait_between_errors(state: Arc<ProgramState>, err: Box<dyn Error>) {
 async fn main_task(state: Arc<ProgramState>) {
     let args = state.cli.read().await;
     if let Some(rec) = args.cmd.as_rec() {
-        if rec.path_dir.exists() {
-            std::fs::create_dir_all(&rec.path_dir).expect("Failed to create path");
-        }
+        *state.path_dir.write().await = match &rec.path_dir {
+            None => {
+                let mut path = dirs::home_dir().expect("Failed to determine home directory D:");
+                path.push("Audio");
+                path.push("akasha");
+                printrn!("Default path auto-detected: {}", path.to_string_lossy());
+                PathBuf::from(path)
+            },
+            Some(path) => {
+                info!("Path set by user: {}", path.to_string_lossy());
+                path.to_owned()
+            },
+        };
+
+        if !state.path_dir.read().await.exists() {
+            std::fs::create_dir_all(state.path_dir.read().await.to_owned()).expect("Failed to create path");
+        };
 
         let new_file_name_stream =
-            streamgen_gen_file_path(rec.clone());
+            streamgen_gen_file_path(&rec, state.path_dir.write().await.to_owned());
         pin_mut!(new_file_name_stream);
 
         let result = record::record_segments(
