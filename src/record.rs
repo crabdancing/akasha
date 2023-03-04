@@ -1,33 +1,37 @@
-use std::error::Error;
-use std::path::PathBuf;
-use std::sync::Arc;
-use std::time::{Duration};
 use cpal::traits::{DeviceTrait, HostTrait};
 use futures_core::Stream;
 use futures_util::{pin_mut, StreamExt};
-use libc::input_absinfo;
-use log::{debug, info};
-use crate::{FormatSelect, get_device_list, microphone, printrn, ProgramState, write_audio};
+use std::error::Error;
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::time::Duration;
+
 use crate::display_volume;
+use crate::{get_device_list, microphone, printrn, write_audio, FormatSelect, ProgramState};
+use log::{debug, info};
 
-
-pub async fn search_for(state: Arc<ProgramState>, dev_name: &String) -> Result<cpal::Device, ()>{
-    for device in state.cpal_host.read().await.input_devices().expect("Failed to get input device info") {
+pub async fn search_for(state: Arc<ProgramState>, dev_name: &String) -> Result<cpal::Device, ()> {
+    for device in state
+        .cpal_host
+        .read()
+        .await
+        .input_devices()
+        .expect("Failed to get input device info")
+    {
         match device.name() {
             Ok(name) => {
                 if name.eq(dev_name) {
                     return Ok(device);
                 }
-            },
-            Err(_) => return Err(())
+            }
+            Err(_) => return Err(()),
         };
     }
     Err(())
 }
 pub async fn record_segments<S: Stream<Item = PathBuf> + Unpin>(
     mut paths: S,
-    state: Arc<ProgramState>
-
+    state: Arc<ProgramState>,
 ) -> Result<S, Box<dyn Error>> {
     while let Some(path) = paths.next().await {
         info!("Begin recording segment...");
@@ -40,11 +44,13 @@ pub async fn record_segments<S: Stream<Item = PathBuf> + Unpin>(
                     panic!("Could not find device: {}", dev_name);
                 }
             }
-            None => host.default_input_device()
+            None => host
+                .default_input_device()
                 .ok_or("No default input device available :c")?,
         };
         let mut supported_configs_range = input_device.supported_input_configs()?;
-        let supported_config = supported_configs_range.next()
+        let supported_config = supported_configs_range
+            .next()
             .ok_or("Could not get the first supported config from range")?
             .with_max_sample_rate();
         let mut config: cpal::StreamConfig = supported_config.into();
@@ -56,32 +62,25 @@ pub async fn record_segments<S: Stream<Item = PathBuf> + Unpin>(
         pin_mut!(stream);
 
         let mut volume_stream_builder_inst = display_volume::VolumeStreamBuilder::new();
-        volume_stream_builder_inst.dur_of_display = match state.cli.read().await.cmd.as_rec().unwrap().display_dur {
-            Some(human_dur) => Some(Duration::from(&human_dur)),
-            None => None
-        };
+        volume_stream_builder_inst.dur_of_display =
+            match state.cli.read().await.cmd.as_rec().unwrap().display_dur {
+                Some(human_dur) => Some(Duration::from(&human_dur)),
+                None => None,
+            };
         volume_stream_builder_inst.time_of_start = *state.time_of_start.read().await;
-        let stream = volume_stream_builder_inst.getstream_display_volume(
-            stream, state.clone()).await;
+        let stream = volume_stream_builder_inst
+            .getstream_display_volume(stream, state.clone())
+            .await;
         pin_mut!(stream);
 
         let dur = state.cli.read().await.cmd.as_rec().unwrap().segment_dur;
         let segment_dur = Duration::from(&dur);
         match state.cli.read().await.cmd.as_rec().unwrap().format {
             FormatSelect::Wav => {
-                write_audio::write_to_wav(
-                    &path,
-                    stream,
-                    &config,
-                    &segment_dur
-                ).await?;
-            },
+                write_audio::write_to_wav(&path, stream, &config, &segment_dur).await?;
+            }
             FormatSelect::Ogg => {
-                write_audio::write_to_ogg(
-                    &path,
-                    stream,
-                    &config,
-                    &segment_dur).await?;
+                write_audio::write_to_ogg(&path, stream, &config, &segment_dur).await?;
             }
         }
         if state.quit_msg.poll().await {
