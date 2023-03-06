@@ -1,4 +1,5 @@
 /target
+/result
 *.wav
 *perf.data*
 *flamegraph.svg*
