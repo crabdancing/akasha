@@ -1,11 +1,18 @@
-{ pkgs ? import <nixpkgs> { } }:
+{
+  description = "A flake for building the akasha Rust program.";
 
-pkgs.rustPlatform.buildRustPackage rec {
-  pname = "akasha";
-  version = "1.2.4";
-  cargoLock.lockFile = ./Cargo.lock;
-  src = pkgs.lib.cleanSource ./.;
-  nativeBuildInputs = [ pkgs.pkg-config ];
-  buildInputs = [ pkgs.alsa-lib ];
+  inputs = {
+    rust-overlay.url = "github:oxalica/rust-overlay";
+    flake-utils.follows = "rust-overlay/flake-utils";
+    nixpkgs.follows = "rust-overlay/nixpkgs";
+  };
+
+  outputs = inputs: with inputs;
+    {
+      defaultPackage = pkgs.lib.platforms.${builtins.currentSystem}.rustPackages.${packageName} {
+        inherit nixpkgs rust-overlay;
+        nativeBuildInputs = [ pkgs.pkg-config ];
+        buildInputs = [ pkgs.alsaLib ];
+      };
+    };
 }
-

@@ -23,6 +23,7 @@ fn set_extension_if_none(p: &mut PathBuf, ext: &str) {
     }
 }
 
+/// Splits a chunk into multiple, based on the number of channels
 pub fn un_interleave<S: Stream<Item = Chunk> + Unpin>(mut input: S, num_channels: usize) -> impl Stream<Item=Vec<Chunk>> {
     fn_stream(|emitter| async move {
         while let Some(chunk) = input.next().await {

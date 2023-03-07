@@ -8,6 +8,7 @@ mod record;
 mod bigdurations;
 mod display_volume;
 mod quitmsg;
+mod noise_filter;
 
 extern crate chrono;
 

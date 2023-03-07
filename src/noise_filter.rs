@@ -25,14 +25,19 @@ pub async fn getstream_noise_filter<S: Stream<Item = Chunk> + Unpin>
     let denoise = std::sync::RwLock::new(DenoiseState::new());
     let mut frame_output: DenoiseChunk = DefaultDenoise::default();
     let mut frame_input: DenoiseChunk = DefaultDenoise::default();
+    let mut buf: Chunk = Vec::new();
+    let mut buf_remainder: Chunk = Vec::new();
     fn_stream(|emitter| async move {
         'outer: loop {
-            for s in &mut frame_input {
-                if let Some(sample) = mic_audio_stream.next().await {
-                    for sample in chunk {
-                    //    *
+            if let Some(mut chunk) = mic_audio_stream.next().await {
+                buf.extend(chunk);
+                if buf.len() >= DenoiseState::FRAME_SIZE {
+                    buf_remainder = buf.split_off(DenoiseState::FRAME_SIZE);
+                    frame_input = DenoiseChunk::try_from(buf.as_slice().clone()).unwrap();
 
-                    }
+                } else {
+
+
                 }
             }
         }

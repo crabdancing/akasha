@@ -12,7 +12,7 @@
         inherit system;
       };
 
-      pkgs.rustPlatform.buildRustPackage rec {
+      pkgs.rustPlatform.buildRustPackage {
         pname = "akasha";
         version = "1.2.4";
         cargoLock.lockFile = ./Cargo.lock;
