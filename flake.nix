@@ -14,13 +14,13 @@
         };
 
         rustPkgs = pkgs.rustBuilder.makePackageSet {
-          rustVersion = "1.61.0";
+          rustVersion = "1.69.0";
           packageFun = import ./Cargo.nix;
         };
 
       in rec {
         packages = {
-          # replace akasha with your package name
+          buildInputs = [ pkgs.alsaLib pkgs.pkg-config ];
           akasha = (rustPkgs.workspace.akasha {}).bin;
           default = packages.akasha;
         };
