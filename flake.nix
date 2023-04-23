@@ -1,6 +1,6 @@
 {
   inputs = {
-    cargo2nix.url = "github:cargo2nix/cargo2nix/unstable";
+    cargo2nix.url = "github:cargo2nix/cargo2nix/release-0.11.0";
     flake-utils.follows = "cargo2nix/flake-utils";
     nixpkgs.follows = "cargo2nix/nixpkgs";
   };
@@ -14,7 +14,7 @@
         };
 
         rustPkgs = pkgs.rustBuilder.makePackageSet {
-          rustVersion = "1.65.0";
+          rustVersion = "1.61.0";
           packageFun = import ./Cargo.nix;
 
           packageOverrides = pkgs: pkgs.rustBuilder.overrides.all ++ [
