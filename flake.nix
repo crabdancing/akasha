@@ -16,20 +16,24 @@
         rustPkgs = pkgs.rustBuilder.makePackageSet {
           rustVersion = "1.61.0";
           packageFun = import ./Cargo.nix;
+
+          packageOverrides = pkgs: pkgs.rustBuilder.overrides.all ++ [
+            (pkgs.rustBuilder.rustLib.makeOverride {
+              overrideAttrs = drv: {
+                propagatedNativeBuildInputs = drv.propagatedNativeBuildInputs or [ ] ++ [
+                  pkgs.alsaLib pkgs.pkg-config
+                ];
+              };
+            })
+          ];
+
         };
 
-        akashaWithDeps = (rustPkgs.workspace.akasha {}).overrideAttrs (old: {
-          nativeBuildInputs = (old.nativeBuildInputs or []) ++ [
-            pkgs.pkg-config
-          ];
-          buildInputs = (old.buildInputs or []) ++ [
-            pkgs.alsaLib
-          ];
-        });
+
 
       in rec {
         packages = {
-          akasha = akashaWithDeps.bin;
+          akasha = (rustPkgs.workspace.akasha {}).bin;
           default = packages.akasha;
         };
       }
