@@ -33,7 +33,7 @@
 
       in rec {
         packages = {
-          akasha = (rustPkgs.workspace.akasha {}).bin;
+          akasha = (rustPkgs.workspace.akasha {});
           default = packages.akasha;
         };
       }
