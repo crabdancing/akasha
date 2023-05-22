@@ -116,11 +116,11 @@ enum ProbeOpts {
     OutputDevices
 }
 
-#[cfg(target_family = "unix")]
-#[derive(Default, Debug)]
-struct Signals {
-    sighup: Arc<AtomicBool>
-}
+// #[cfg(target_family = "unix")]
+// #[derive(Default, Debug)]
+// struct Signals {
+//     sighup: Arc<AtomicBool>
+// }
 
 #[derive(Default, Debug)]
 struct TermSize {
@@ -166,7 +166,7 @@ pub struct ProgramState {
     quit_msg: QuitMsg,
     display: RwLock<bool>,
     #[cfg(target_family = "unix")]
-    signals: RwLock<Signals>,
+    // signals: RwLock<Signals>,
     interactive: RwLock<bool>,
     path_dir: RwLock<PathBuf>,
 }
@@ -188,7 +188,7 @@ impl ProgramState {
             cli: RwLock::new(cli),
             time_of_start: RwLock::new(Instant::now()),
             #[cfg(target_family = "unix")]
-            signals: RwLock::new(Signals::default()),
+            // signals: RwLock::new(Signals::default()),
             cpal_host: RwLock::new(cpal::default_host()),
             term_size: RwLock::new(TermSize::query()),
             quit_msg: QuitMsg::new(),
@@ -405,15 +405,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
         },
     }
 
-    #[cfg(target_family = "unix")]
-    match signal_hook::flag::register(libc::SIGHUP, (&state.signals.write().await.sighup).clone()) {
-        Ok(_) => {
-            info!("Registered Linux signal hook successfully.")
-        },
-        Err(_) => {
-            warn!("Warning: couldn't register signal: SIGHUP");
-        }
-    }
+    // #[cfg(target_family = "unix")]
+    // match signal_hook::flag::register(libc::SIGHUP, (&state.signals.write().await.sighup).clone()) {
+    //     Ok(_) => {
+    //         info!("Registered Linux signal hook successfully.")
+    //     },
+    //     Err(_) => {
+    //         warn!("Warning: couldn't register signal: SIGHUP");
+    //     }
+    // }
 
     let rt = Runtime::new().expect("Couldn't get runtime :(");
 
