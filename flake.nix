@@ -24,7 +24,8 @@
 
         # For `nix develop`:
         devShell = pkgs.mkShell {
-          nativeBuildInputs = with pkgs; [ rustc cargo ];
+          nativeBuildInputs = with pkgs; [ rustc cargo pkg-config alsaLib libogg ];
+          PKG_CONFIG_PATH = "${pkgs.alsaLib}/lib/pkgconfig:${pkgs.libogg}/lib/pkgconfig";
         };
       }
     );
