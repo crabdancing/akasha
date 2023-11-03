@@ -2,50 +2,50 @@
 // TODO: more intelligent microphone device selection logic -- maybe use an argument to pass mic name?
 // TODO: turn off console indicator with SIGHUP
 
-mod write_audio;
-mod microphone;
-mod record;
 mod bigdurations;
 mod display_volume;
-mod quitmsg;
+mod microphone;
 mod noise_filter;
+mod quitmsg;
+mod record;
+mod write_audio;
 
 extern crate chrono;
 
-use std::{error, thread};
+use crate::FormatSelect::Ogg;
+use async_fn_stream::fn_stream;
+use chrono::{DateTime, Local};
+use clap::{Parser, Subcommand, ValueEnum};
+use clap_duration::duration_range_value_parse;
+use cpal::traits::{DeviceTrait, HostTrait};
+use cpal::Host;
+use crossterm::event;
+use crossterm::event::KeyCode::Char;
+use crossterm::event::{Event, KeyModifiers};
+use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
+use duration_human::{DurationHuman, DurationHumanValidator};
+use enum_as_inner::EnumAsInner;
+use futures_core::Stream;
+use futures_util::{pin_mut, AsyncReadExt};
+use lazy_static::lazy_static;
+use log::{debug, error, info, trace, warn};
+use printrn::printrn;
+use quitmsg::QuitMsg;
+use signal_hook::low_level;
 use std::borrow::ToOwned;
 use std::error::Error;
 use std::ffi::OsString;
 use std::fmt::{Debug, Formatter};
 use std::ops::Deref;
-use chrono::{DateTime, Local};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
 use std::time::Duration;
-use clap::{Parser, Subcommand, ValueEnum};
-use futures_core::Stream;
-use futures_util::{AsyncReadExt, pin_mut};
+use std::{error, thread};
+use tokio::io::AsyncWriteExt;
+use tokio::runtime::Runtime;
 use tokio::sync::{RwLock, RwLockReadGuard};
 use tokio::time::Instant;
-use clap_duration::{duration_range_value_parse};
-use cpal::traits::{DeviceTrait, HostTrait};
-use crossterm::{event};
-use crossterm::event::{Event, KeyModifiers};
-use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
-use duration_human::{DurationHuman, DurationHumanValidator};
-use crate::FormatSelect::Ogg;
-use enum_as_inner::EnumAsInner;
-use tokio::runtime::Runtime;
-use async_fn_stream::fn_stream;
-use cpal::Host;
-use crossterm::event::KeyCode::Char;
-use lazy_static::lazy_static;
-use log::{debug, error, info, trace, warn};
-use signal_hook::low_level;
-use quitmsg::QuitMsg;
-use printrn::printrn;
-use tokio::io::AsyncWriteExt;
 
 type Chunk = Vec<f32>;
 
@@ -67,24 +67,29 @@ struct Cli {
     #[command(subcommand)]
     cmd: Commands,
     #[arg(short, long)]
-    interactive: bool
+    interactive: bool,
 }
 
 #[derive(Subcommand, Debug, Clone, EnumAsInner)]
 enum Commands {
     Probe(Probe),
-    Rec(Rec)
+    Rec(Rec),
 }
 
 #[derive(clap::Args, Debug, Clone)]
 struct Probe {
     #[arg(long)]
     // the underscore is necessary here because `type` is already a reserved identifier >.<
-    type_: ProbeOpts
+    type_: ProbeOpts,
 }
 #[derive(clap::Args, Debug, Clone)]
 struct Rec {
-    #[arg(short, long, default_value = "ogg", help = "The format used to write the recording\n")]
+    #[arg(
+        short,
+        long,
+        default_value = "ogg",
+        help = "The format used to write the recording\n"
+    )]
     format: FormatSelect,
     #[arg(short, long)]
     // #[clap(conflicts_with="list_devices")]
@@ -113,7 +118,7 @@ struct Rec {
 #[derive(Parser, Debug, ValueEnum, Clone)]
 enum ProbeOpts {
     InputDevices,
-    OutputDevices
+    OutputDevices,
 }
 
 // #[cfg(target_family = "unix")]
@@ -125,27 +130,23 @@ enum ProbeOpts {
 #[derive(Default, Debug)]
 struct TermSize {
     x: u16,
-    y: u16
+    y: u16,
 }
 
 impl TermSize {
     fn query() -> Self {
         match crossterm::terminal::size() {
-            Ok((x, y)) => Self {x, y},
-            _ => TermSize::default()
+            Ok((x, y)) => Self { x, y },
+            _ => TermSize::default(),
         }
     }
 
     fn from_tuple((x, y): (u16, u16)) -> Self {
-        Self {
-            x, y
-        }
+        Self { x, y }
     }
 
     fn from_x_y(x: u16, y: u16) -> Self {
-        Self {
-            x, y
-        }
+        Self { x, y }
     }
 
     fn set_from_x_y(&mut self, x: u16, y: u16) {
@@ -182,7 +183,10 @@ pub struct ProgramState {
 
 impl ProgramState {
     fn new(cli: Cli) -> Self {
-        let display = match cli.cmd.as_rec() { Some(r) => r.display, None => false };
+        let display = match cli.cmd.as_rec() {
+            Some(r) => r.display,
+            None => false,
+        };
         let interactive = cli.interactive;
         Self {
             cli: RwLock::new(cli),
@@ -216,18 +220,19 @@ async fn get_device_list(state: &ProgramState) -> Result<Vec<String>, Box<dyn Er
     for device in state.cpal_host.read().await.input_devices()? {
         match device.name() {
             Ok(name) => out.push(name),
-            Err(_) => ()
+            Err(_) => (),
         }
     }
     Ok(out)
 }
 
-
-fn streamgen_gen_file_path<'a>(rec: &'a Rec, path_dir: PathBuf) -> impl Stream<Item = PathBuf>  + 'a {
+fn streamgen_gen_file_path<'a>(
+    rec: &'a Rec,
+    path_dir: PathBuf,
+) -> impl Stream<Item = PathBuf> + 'a {
     fn_stream(|emitter| async move {
         let now: DateTime<Local> = Local::now();
-        let timestamp_string =
-            now.format(rec.time_format.as_str());
+        let timestamp_string = now.format(rec.time_format.as_str());
         let mut recording_path = path_dir;
         let basename = format!("{}__{}", rec.name_prefix, timestamp_string.to_string());
         recording_path.push(basename);
@@ -236,14 +241,21 @@ fn streamgen_gen_file_path<'a>(rec: &'a Rec, path_dir: PathBuf) -> impl Stream<I
 }
 
 async fn display_probe_info_if_requested(state: &ProgramState) -> Result<bool, Box<dyn Error>> {
-    match state.cli.read().await.cmd.as_probe()
-        .ok_or("Probe command not selected")?.type_ {
+    match state
+        .cli
+        .read()
+        .await
+        .cmd
+        .as_probe()
+        .ok_or("Probe command not selected")?
+        .type_
+    {
         ProbeOpts::InputDevices => {
             match get_device_list(&state).await {
                 Ok(list) => {
                     printrn!("{:#?}", list);
                 }
-                Err(_) => ()
+                Err(_) => (),
             }
             return Ok(true);
         }
@@ -263,7 +275,10 @@ async fn skippable_sleep(dur: Duration, state: Arc<ProgramState>) {
 
 async fn wait_between_errors(state: Arc<ProgramState>, err: Box<dyn Error>) {
     let wait_time = 30;
-    warn!("Recording segment failed with error: {}\nWill attempt again in {} secs...", err, wait_time);
+    warn!(
+        "Recording segment failed with error: {}\nWill attempt again in {} secs...",
+        err, wait_time
+    );
     skippable_sleep(Duration::from_secs(wait_time), state.clone()).await;
 }
 
@@ -277,32 +292,29 @@ async fn main_task(state: Arc<ProgramState>) {
                 path.push("akasha");
                 printrn!("Default path auto-detected: {}", path.to_string_lossy());
                 PathBuf::from(path)
-            },
+            }
             Some(path) => {
                 info!("Path set by user: {}", path.to_string_lossy());
                 path.to_owned()
-            },
+            }
         };
 
         if !state.path_dir.read().await.exists() {
-            std::fs::create_dir_all(state.path_dir.read().await.to_owned()).expect("Failed to create path");
+            std::fs::create_dir_all(state.path_dir.read().await.to_owned())
+                .expect("Failed to create path");
         };
 
         let new_file_name_stream =
             streamgen_gen_file_path(&rec, state.path_dir.write().await.to_owned());
         pin_mut!(new_file_name_stream);
 
-        let result = record::record_segments(
-            new_file_name_stream,
-            state.clone()
-        ).await;
+        let result = record::record_segments(new_file_name_stream, state.clone()).await;
 
         if let Err(e) = result {
             wait_between_errors(state.clone(), e.into()).await;
         }
     }
 }
-
 
 async fn handle_signals(state: Arc<ProgramState>) -> Result<(), Box<dyn Error>> {
     match event::read()? {
@@ -322,10 +334,9 @@ async fn handle_signals(state: Arc<ProgramState>) -> Result<(), Box<dyn Error>> 
                 state_cur = !state_cur;
                 *state.display.write().await = state_cur;
                 info!("Display state toggled to: {}", state_cur);
-
             }
             if key.modifiers == KeyModifiers::CONTROL {
-                if key.code == Char('c') || key.code == Char('d'){
+                if key.code == Char('c') || key.code == Char('d') {
                     state.quit_msg.send_quit().await;
                 }
                 if key.code == Char('z') {
@@ -361,7 +372,6 @@ async fn signal_thread(state: Arc<ProgramState>) {
     }
 }
 
-
 async fn update_raw_mode<'a>(state: RwLockReadGuard<'a, bool>) -> Result<(), Box<dyn Error>> {
     match *state {
         true => {
@@ -375,10 +385,11 @@ async fn update_raw_mode<'a>(state: RwLockReadGuard<'a, bool>) -> Result<(), Box
     Ok(())
 }
 
-
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    env_logger::init_from_env(env_logger::Env::default().filter_or(env_logger::DEFAULT_FILTER_ENV, "info"));
+    env_logger::init_from_env(
+        env_logger::Env::default().filter_or(env_logger::DEFAULT_FILTER_ENV, "info"),
+    );
     trace!("Begin main()");
 
     let args = Cli::parse();
@@ -397,12 +408,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }
 
     match display_probe_info_if_requested(&state).await {
-        Ok(quit_flag) => if quit_flag {
-            disable_raw_mode()?;
-            return Ok(()); // goodbye :3
+        Ok(quit_flag) => {
+            if quit_flag {
+                disable_raw_mode()?;
+                return Ok(()); // goodbye :3
+            }
         }
-        _ => {
-        },
+        _ => {}
     }
 
     // #[cfg(target_family = "unix")]
@@ -418,35 +430,37 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let rt = Runtime::new().expect("Couldn't get runtime :(");
 
     let state_ptr = state.clone();
-    let _signal_thread_handle = thread::spawn(move || {
-        rt.block_on(signal_thread(state_ptr))
-    });
+    let _signal_thread_handle = thread::spawn(move || rt.block_on(signal_thread(state_ptr)));
 
     let local = tokio::task::LocalSet::new();
-
 
     // task is set inside a LocalSet to allow us to catch any bad API panicking
     // ( C FFI libraries, I'm looking at you ;) )
     // without making it impossible to use .await (as seems to be the case with catch_unwind)
     let state_ptr = state.clone();
-    local.run_until(async move {
-        let state_ptr = state_ptr.clone();
-        while !state_ptr.quit_msg.poll().await {
-            let state_ptr_main_task = state_ptr.clone();
-            let task_result = tokio::task::spawn_local(async move {
-                main_task(state_ptr_main_task).await;
-            }).await;
+    local
+        .run_until(async move {
+            let state_ptr = state_ptr.clone();
+            while !state_ptr.quit_msg.poll().await {
+                let state_ptr_main_task = state_ptr.clone();
+                let task_result = tokio::task::spawn_local(async move {
+                    main_task(state_ptr_main_task).await;
+                })
+                .await;
 
-            match task_result {
-                Ok(_) => {}
-                Err(e) => wait_between_errors(state_ptr.clone(), e.into()).await
+                match task_result {
+                    Ok(_) => {}
+                    Err(e) => wait_between_errors(state_ptr.clone(), e.into()).await,
+                }
             }
-        }
-    }).await;
-
+        })
+        .await;
 
     let state_ptr = state.clone();
-    state_ptr.update_raw_mode().await.expect("Error updating raw mode.");
+    state_ptr
+        .update_raw_mode()
+        .await
+        .expect("Error updating raw mode.");
 
     Ok(())
 }
