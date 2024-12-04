@@ -19,13 +19,13 @@
         defaultPackage = naersk'.buildPackage {
           src = ./.;
           nativeBuildInputs = with pkgs; [ pkg-config ];
-          buildInputs = with pkgs; [ alsaLib libogg ];
+          buildInputs = with pkgs; [ alsa-lib libogg ];
         };
 
         # For `nix develop`:
         devShell = pkgs.mkShell {
-          nativeBuildInputs = with pkgs; [ rustc cargo pkg-config alsaLib libogg ];
-          PKG_CONFIG_PATH = "${pkgs.alsaLib}/lib/pkgconfig:${pkgs.libogg}/lib/pkgconfig";
+          nativeBuildInputs = with pkgs; [ rustc cargo pkg-config alsa-lib libogg ];
+          PKG_CONFIG_PATH = "${pkgs.alsa-lib}/lib/pkgconfig:${pkgs.libogg}/lib/pkgconfig";
         };
       }
     );
