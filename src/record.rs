@@ -38,7 +38,13 @@ pub async fn record_segments<S: Stream<Item = PathBuf> + Unpin>(
         let host = cpal::default_host();
         let input_device = match &state.cli.read().await.cmd.as_rec().unwrap().device {
             Some(dev_name) => {
-                if let Ok(device) = search_for(state.clone(), dev_name).await {
+                if let Ok(device) = search_for(state.clone(), &String::from("pipewire")).await {
+                    device
+                } else if let Ok(device) =
+                    search_for(state.clone(), &String::from("pulseaudio")).await
+                {
+                    device
+                } else if let Ok(device) = search_for(state.clone(), dev_name).await {
                     device
                 } else {
                     panic!("Could not find device: {}", dev_name);
